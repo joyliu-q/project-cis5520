@@ -31,26 +31,51 @@ test_wsP =
 
 
 -- Tag parsers
-descriptionP :: Parse Description
-descriptionP = undefined
 
-authorP :: Parse Tag
-authorP = undefined
+-- Parser for the string that comes directly after an @tag
 
-paramP :: Parse Tag
-paramP = undefined
+-- @author name-text
 
-returnP :: Parse Tag
-returnP = undefined
 
-throwsP :: Parse Tag
-throwsP = undefined
+anyChar = P.satisfy (const True)
 
-versionP :: Parse Tag
-versionP = undefined
+-- >>> P.parse authorP "@author John Smith"
+-- Right (Author (Description "John Smith"))
+
+-- Given a string "tag", returns a parser for the string that comes directly after the @tag
+-- >>> P.parse (descriptionTagP "author") "@author John Smith"
+-- Right (Description "John Smith")
+descriptionTagP :: String -> Parse Description
+descriptionTagP tag  = Description <$> (wsP (P.string tagString) *> wsP (many anyChar))
+  where
+    tagString = "@" ++ tag
+
+-- Given a string "tag", returns a parser for the Name (first word) and Description (rest of the string) that comes directly after the @tag
+
+nameDescriptionTagP :: String -> (Parse Name, Parse Description)
+nameDescriptionTagP tag = do 
+  let tagString = "@" ++ tag
+  -- name is the first word after the tag
+  let name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum)))
+  -- descriptionParser is a parser for the string aftr both the tag and the name, stripped of any "\n" characters
+  let description = Description <$> wsP (many (P.satisfy (/= '\n')))
+  (name, description)
 
 tagP :: Parse Tag
 tagP = wsP (authorP <|> paramP <|> returnP <|> throwsP <|> versionP)
+  where
+    authorP :: Parse Tag
+    authorP = Author <$> descriptionTagP "author"
+    paramP :: Parse Tag
+    paramP = Param <$> name <*> description where
+      (name, description) = nameDescriptionTagP "param"
+    returnP :: Parse Tag
+    returnP = Return <$> descriptionTagP "return"
+    throwsP :: Parse Tag
+    throwsP = Throws <$> name <*> description where
+      (name, description) = nameDescriptionTagP "throws"
+    versionP :: Parse Tag
+    versionP = Version <$> descriptionTagP "version"
 
 test_tagP :: Test
 test_tagP =
