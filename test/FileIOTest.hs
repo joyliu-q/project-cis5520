@@ -1,5 +1,5 @@
-module FileIOTest where
-
+module ImageIOTest where
+    
 import Test.HUnit
 import Test.QuickCheck
 import FileIO

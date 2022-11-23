@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+
 -- Two types of Methods: interface method and class method.
 -- look for first curly brace or semicolon
 

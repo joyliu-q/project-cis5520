@@ -1,4 +1,5 @@
 module FileIO where
+
 import System.IO ( hGetContents, hPutStr, hClose, openFile, IOMode(ReadMode, WriteMode) )
 
 
