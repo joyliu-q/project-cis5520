@@ -57,7 +57,7 @@ nameDescriptionTagP tag = do
   let tagString = "@" ++ tag
   -- name is the first word after the tag
   let name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum)))
-  -- descriptionParser is a parser for the string aftr both the tag and the name, stripped of any "\n" characters
+  -- descriptionParser is a parser for the string after both the tag and the name, stripped of any "\n" characters
   let description = Description <$> wsP (many (P.satisfy (/= '\n')))
   (name, description)
 
@@ -85,9 +85,31 @@ test_tagP =
       P.parse tagP "@param x the x value\n" ~?= Right (Param (Name "x") (Description "the x value"))
     ]
 
+-- Extract inner values of a comment. Comment can either by enclosed by /* */ (multiline) or // (single line)
+-- >>> P.parse commentP "/** \n \n @param x the x value*/"
+-- Right "@param x the x value"
+
+-- TODO: slightly broken
+commentP :: Parse String
+commentP = wsP (oneLineCommentP <|> multiLineCommentP)
+  where
+    oneLineCommentP :: Parse String
+    oneLineCommentP = wsP (P.string "//") *> many (P.satisfy (/= '/'))
+    multiLineCommentP :: Parse String
+    multiLineCommentP = wsP (P.string "/**") *> many middleStatements <* wsP (P.string "*/") where
+      middleStatements = -- strip any leading * if they're the first character (before any characters or \n) or if they're preceded by a \n
+        P.satisfy (/= '*') <|> wsP (P.satisfy (== '*') *> wsP (P.satisfy (== '/')) *> wsP (P.satisfy (== '\n')))
+        
 -- JavaDocComment parsers
-classP :: Parse JavaDocComment
-classP = undefined
+-- >>> P.parse classP "class Foo {}"
+-- Right (Class (Name "Foo") (Description "{}") [])
+classP = Class <$> name <*> body <*> many tagP
+  where
+    tagString = "class"
+    -- name is the first word after the tag
+    name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum)))
+    -- TODO: currently description is body, but that's not true
+    body = Description <$> wsP (many (P.satisfy (/= '\n')))  
 
 -- TODO: Public vs private classes?
 test_classP :: Test

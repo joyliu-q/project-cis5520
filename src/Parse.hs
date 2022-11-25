@@ -6,7 +6,7 @@
 module Parse(Parse, doParse, get, eof, filter, 
                           parse, parseFromFile, ParseError,
                           satisfy, alpha, digit, upper, lower, space,
-                          char, string, int,
+                          char, string, int, peek,
                           chainl1, chainl, choice,
                           between, sepBy1, sepBy) where
 
@@ -129,6 +129,10 @@ string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
 int :: Parse Int
 int = read <$> ((++) <$> string "-" <*> some digit <|> some digit)
 
+peek :: Maybe Char
+peek = do 
+  res <- doParse get "" 
+  return $ fst res
 
 -- | Parses one or more occurrences of @p@ separated by binary operator
 -- parser @pop@.  Returns a value produced by a /left/ associative application
