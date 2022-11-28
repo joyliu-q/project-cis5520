@@ -29,6 +29,20 @@ test_wsP =
       P.parse (many (wsP P.alpha)) "a b \n   \t c" ~?= Right "abc"
     ]
 
+-- takes a parser, runs it, then skips over any 'string' occurring afterwards
+skipStringsP :: [String] -> Parse [Char]
+skipStringsP l = case l of
+  [] -> wsP (many (P.satisfy (/= '\n')))
+  hd : tl -> P.string hd <|> skipStringsP tl
+
+testSkipStringsP :: Test
+testSkipStringsP =
+  TestList
+    [ P.parse (skipStringsP ["public"]) "public class Foo {}" ~?= Right "class Foo {}",
+      P.parse (skipStringsP ["private"]) "private class Foo {}" ~?= Right "class Foo {}",
+      P.parse (skipStringsP ["private", "public"]) "private class Foo {}" ~?= Right "class Foo {}",
+      P.parse (skipStringsP ["private", "public"]) "public class Foo {}" ~?= Right "class Foo {}"
+    ]
 
 -- Tag parsers
 
@@ -99,18 +113,20 @@ commentP = wsP (oneLineCommentP <|> multiLineCommentP)
     multiLineCommentP = wsP (P.string "/**") *> many middleStatements <* wsP (P.string "*/") where
       middleStatements = -- strip any leading * if they're the first character (before any characters or \n) or if they're preceded by a \n
         P.satisfy (/= '*') <|> wsP (P.satisfy (== '*') *> wsP (P.satisfy (== '/')) *> wsP (P.satisfy (== '\n')))
-        
+
 -- JavaDocComment parsers
--- >>> P.parse classP "class Foo {}"
--- Right (Class (Name "Foo") (Description "{}") [])
+-- >>> P.parse classP "private class Foo {}"
+-- Right (Class (Name "class") (Description "Foo {}") [])
 classP = Class <$> name <*> body <*> many tagP
   where
     tagString = "class"
     -- name is the first word after the tag
-    name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name = Name <$> wrapperP
     -- TODO: currently description is body, but that's not true
     body = Description <$> wsP (many (P.satisfy (/= '\n')))  
-
+    wrapperP = -- skips over any characters not in 'class' string until arriving at class
+      wsP (skipStringsP ["public", "private"]) *> wsP (P.string tagString)
+  
 -- TODO: Public vs private classes?
 test_classP :: Test
 test_classP = TestList [
