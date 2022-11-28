@@ -18,6 +18,7 @@ import qualified Data.Functor
 -- prop_roundtrip_stat :: Statement -> Bool
 -- prop_roundtrip_stat s = P.parse statementP (pretty s) == Right s
 
+-- Helper functions
 -- takes a parser, runs it, then skips over any whitespace characters occurring afterwards
 wsP :: Parse a -> Parse a
 wsP p = p <* many (P.satisfy Char.isSpace)
@@ -29,29 +30,30 @@ test_wsP =
       P.parse (many (wsP P.alpha)) "a b \n   \t c" ~?= Right "abc"
     ]
 
--- takes a parser, runs it, then skips over any 'string' occurring afterwards
-skipStringsP :: [String] -> Parse [Char]
-skipStringsP l = case l of
-  [] -> wsP (many (P.satisfy (/= '\n')))
-  hd : tl -> P.string hd <|> skipStringsP tl
+-- takes a parser, runs it, then returns any 'string' occurring afterwards
+stringsP :: [String] -> Parse [Char]
+stringsP l = case l of
+  [] -> pure []
+  hd : tl -> P.string hd <|> stringsP tl
 
 testSkipStringsP :: Test
 testSkipStringsP =
   TestList
-    [ P.parse (skipStringsP ["public"]) "public class Foo {}" ~?= Right "class Foo {}",
-      P.parse (skipStringsP ["private"]) "private class Foo {}" ~?= Right "class Foo {}",
-      P.parse (skipStringsP ["private", "public"]) "private class Foo {}" ~?= Right "class Foo {}",
-      P.parse (skipStringsP ["private", "public"]) "public class Foo {}" ~?= Right "class Foo {}"
+    [ P.parse (stringsP ["public"]) "public class Foo {}" ~?= Right "public",
+      P.parse (stringsP ["private"]) "private class Foo {}" ~?= Right "private",
+      P.parse (stringsP ["private", "public"]) "private class Foo {}" ~?= Right "private",
+      P.parse (stringsP []) "public class Foo {}" ~?= Right "",
+      P.parse (stringsP ["public", "private"]) "class Foo {}" ~?= Right ""
     ]
+
+-- takes a parser, runs it, and returns everything
+anyChar = P.satisfy (const True)
 
 -- Tag parsers
 
 -- Parser for the string that comes directly after an @tag
 
 -- @author name-text
-
-
-anyChar = P.satisfy (const True)
 
 -- >>> P.parse authorP "@author John Smith"
 -- Right (Author (Description "John Smith"))
@@ -116,7 +118,7 @@ commentP = wsP (oneLineCommentP <|> multiLineCommentP)
 
 -- JavaDocComment parsers
 -- >>> P.parse classP "private class Foo {}"
--- Right (Class (Name "class") (Description "Foo {}") [])
+-- Right (Class (Name "Foo") (Description "{}") [])
 classP = Class <$> name <*> body <*> many tagP
   where
     tagString = "class"
@@ -125,7 +127,7 @@ classP = Class <$> name <*> body <*> many tagP
     -- TODO: currently description is body, but that's not true
     body = Description <$> wsP (many (P.satisfy (/= '\n')))  
     wrapperP = -- skips over any characters not in 'class' string until arriving at class
-      wsP (skipStringsP ["public", "private"]) *> wsP (P.string tagString)
+      wsP (stringsP ["public", "private"]) *> wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum))
   
 -- TODO: Public vs private classes?
 test_classP :: Test
