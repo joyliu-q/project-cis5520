@@ -21,48 +21,48 @@ generateMarkdownObj doc = undefined
 testConvertClass :: Test
 testConvertClass =
   TestList
-    [ generateMarkdownObj (JavaDoc [Class (Name "ArrayList") (Description "This is the ArrayList class.") []])
+    [ generateMarkdownObj (JavaDoc [Class (Description "This is the ArrayList class.") [] (Name "ArrayList")])
         ~?= Markdown [H1 (Text "Class ArrayList"), H2 (Text "Description"), PlainText (Text "This is the ArrayList class.")],
-      generateMarkdownObj (JavaDoc [Class (Name "Serializer") (Description "") []])
+      generateMarkdownObj (JavaDoc [Class (Description "") [] (Name "Serializer")])
         ~?= Markdown [H1 (Text "Class ArrayList")],
-      generateMarkdownObj (JavaDoc [Class (Name "Consumer") (Description "This is the Consumer class.") [Author (Description "John Smith")]])
+      generateMarkdownObj (JavaDoc [Class (Description "This is the Consumer class.") [Author (Description "John Smith")] (Name "Consumer")])
         ~?= Markdown [H1 (Text "Class Consumer"), H2 (Text "Description"), PlainText (Text "This is the Consumer class."), H2 (Text "Author"), PlainText (Text "John Smith")],
-      generateMarkdownObj (JavaDoc [Class (Name "VersionClass") (Description "This is the VersionClass class.") [Version (Description "1.0.5")]])
+      generateMarkdownObj (JavaDoc [Class (Description "This is the VersionClass class.") [Version (Description "1.0.5")] (Name "VersionClass")])
         ~?= Markdown [H1 (Text "Class VersionClass"), H2 (Text "Description"), PlainText (Text "This is the VersionClass class."), H2 (Text "Version"), PlainText (Text "1.0.5")]
     ]
 
 testConvertMethod :: Test
 testConvertMethod =
   TestList
-    [ generateMarkdownObj (JavaDoc [Method (Name "run") (Description "This is the run method.") []])
+    [ generateMarkdownObj (JavaDoc [Method (Description "This is the run method.") [] (Name "run")])
         ~?= Markdown [H1 (Text "Method run"), H2 (Text "Description"), PlainText (Text "This is the run method.")],
-      generateMarkdownObj (JavaDoc [Method (Name "run2") (Description "") []])
+      generateMarkdownObj (JavaDoc [Method (Description "") [] (Name "run2")])
         ~?= Markdown [H1 (Text "Method run2")],
-      generateMarkdownObj (JavaDoc [Method (Name "run3") (Description "This is the run method.") [Deprecated (Description "Support for this was removed.")]])
+      generateMarkdownObj (JavaDoc [Method (Description "This is the run method.") [Deprecated (Description "Support for this was removed.")] (Name "run3")])
         ~?= Markdown [H1 (Text "Method run3"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")],
-      generateMarkdownObj (JavaDoc [Method (Name "run4") (Description "This is the run method.") [Param (Name "param1") (Description "param1 description"), Param (Name "param2") (Description "param2 description"), Return (Description "return value description"), Version (Description "1.0.5")]])
+      generateMarkdownObj (JavaDoc [Method (Description "This is the run method.") [Param (Name "param1") (Description "param1 description"), Param (Name "param2") (Description "param2 description"), Return (Description "return value description"), Version (Description "1.0.5")] (Name "run4")])
         ~?= Markdown [H1 (Text "Method run4"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Parameter param1"), PlainText (Text "Parameter param1 description"), H2 (Text "Parameter param2"), PlainText (Text "Parameter param2 description"), H2 (Text "Return"), PlainText (Text "return value description"), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")]
     ]
 
 testConvertInterface :: Test
 testConvertInterface =
   TestList
-    [ generateMarkdownObj (JavaDoc [Interface (Name "List") (Description "This is the List interface.") []])
+    [ generateMarkdownObj (JavaDoc [Interface (Description "This is the List interface.") [] (Name "List")])
         ~?= Markdown [H1 (Text "Interface List"), H2 (Text "Description"), PlainText (Text "This is the List interface.")],
-      generateMarkdownObj (JavaDoc [Interface (Name "Serializer") (Description "") []])
+      generateMarkdownObj (JavaDoc [Interface (Description "") [] (Name "Serializer")])
         ~?= Markdown [H1 (Text "Interface List")],
-      generateMarkdownObj (JavaDoc [Interface (Name "Consumer") (Description "This is the Consumer interface.") [Author (Description "John Smith")]])
+      generateMarkdownObj (JavaDoc [Interface (Description "This is the Consumer interface.") [Author (Description "John Smith")] (Name "Consumer")])
         ~?= Markdown [H1 (Text "Interface Consumer"), H2 (Text "Description"), PlainText (Text "This is the Consumer interface."), H2 (Text "Author"), PlainText (Text "John Smith")],
-      generateMarkdownObj (JavaDoc [Interface (Name "VersionInterface") (Description "This is the VersionInterface interface.") [Version (Description "1.0.5")]])
+      generateMarkdownObj (JavaDoc [Interface (Description "This is the VersionInterface interface.") [Version (Description "1.0.5")] (Name "VersionInterface")])
         ~?= Markdown [H1 (Text "Interface VersionInterface"), H2 (Text "Description"), PlainText (Text "This is the VersionInterface interface."), H2 (Text "Version"), PlainText (Text "1.0.5")]
     ]
 
 testConvertEnum :: Test
 testConvertEnum =
   TestList
-    [ generateMarkdownObj (JavaDoc [Enum (Name "Color") (Description "This is the Color enum.")])
+    [ generateMarkdownObj (JavaDoc [Enum (Description "This is the Color enum.") (Name "Color")])
         ~?= Markdown [H1 (Text "Enum Color"), H2 (Text "Description"), PlainText (Text "This is the Color enum.")],
-      generateMarkdownObj (JavaDoc [Enum (Name "Status") (Description "")])
+      generateMarkdownObj (JavaDoc [Enum (Description "") (Name "Status")])
         ~?= Markdown [H1 (Text "Enum Status")]
     ]
 
