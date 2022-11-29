@@ -15,10 +15,10 @@ data Tag
   deriving (Eq, Show)
 
 data JavaDocComment
-  = Class Name Description [Tag]
-  | Method Name Description [Tag]
-  | Interface Name Description [Tag]
-  | Enum Name Description
+  = Class Description [Tag] Name
+  | Method Description [Tag] Name
+  | Interface Description [Tag] Name
+  | Enum Description Name
   deriving (Eq, Show)
 
 newtype JavaDoc = JavaDoc [JavaDocComment] deriving (Eq, Show)
