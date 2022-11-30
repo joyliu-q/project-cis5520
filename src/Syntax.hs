@@ -14,10 +14,13 @@ data Tag
   | Version Description -- @version version-text
   deriving (Eq, Show)
 
+data JavaDocHeader = JavaDocHeader Description [Tag]
+  deriving (Eq, Show)
+
 data JavaDocComment
-  = Class Description [Tag] Name
-  | Method Description [Tag] Name
-  | Interface Description [Tag] Name
+  = Class JavaDocHeader Name
+  | Method JavaDocHeader Name
+  | Interface JavaDocHeader Name
   | Enum Description Name
   deriving (Eq, Show)
 
