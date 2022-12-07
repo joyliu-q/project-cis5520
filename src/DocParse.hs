@@ -1,6 +1,3 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Avoid lambda" #-}
 module DocParse where
 
 import Control.Applicative
@@ -14,26 +11,18 @@ import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck
 import Test.QuickCheck qualified as QC
 
-stopAtString prefix = stopAtStringRec ""
-  where
-    stopAtStringRec :: String -> String -> String
-    stopAtStringRec resAcc remainingStr =
-      case remainingStr of
-        [] -> resAcc
-        _ -> do
-          if take (length prefix) remainingStr == prefix
-            then resAcc
-            else stopAtStringRec (resAcc ++ [head remainingStr]) (tail remainingStr)
-
 -- Helper functions
--- takes a parser, runs it, then skips over any whitespace characters occurring afterwards
 wsP :: Parse a -> Parse a
 wsP p = p <* many (P.satisfy Char.isSpace)
 
--- >>> P.parse (many (nlP P.alpha)) "\nhiiii \n"
--- Right "hiiii"
 nlP :: Parse a -> Parse a
 nlP p = many (P.satisfy (== '\n')) *> p <* many (P.satisfy (== '\n'))
+
+braces :: Parse String
+braces = wsP (P.string "{") <* many (P.satisfy (/= '}')) <* wsP (P.string "}")
+
+paren :: Parse String
+paren = wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")")
 
 test_wsP :: Test
 test_wsP =
@@ -41,7 +30,6 @@ test_wsP =
     [ P.parse (wsP P.alpha) "a" ~?= Right 'a',
       P.parse (many (wsP P.alpha)) "a b \n   \t c" ~?= Right "abc"
     ]
-
 test_nlP :: Test
 test_nlP =
   TestList
@@ -49,14 +37,10 @@ test_nlP =
       P.parse (many (nlP P.alpha)) "ab \n   \t c" ~?= Right "ab"
     ]
 
--- takes a parser, runs it, then returns any 'string' occurring afterwards
 stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
   [] -> pure []
   hd : tl -> P.string hd <|> stringsP tl
-
--- takes a parser, runs it, and returns anything that's not a 'string' given
-
 testStringsP :: Test
 testStringsP =
   TestList
@@ -96,19 +80,14 @@ nameDescriptionTagP tag = do
 tagP :: Parse Tag
 tagP = wsP (authorP <|> paramP <|> returnP <|> throwsP <|> versionP)
   where
-    authorP :: Parse Tag
     authorP = Author <$> descriptionTagP "author"
-    paramP :: Parse Tag
     paramP = Param <$> name <*> description
       where
         (name, description) = nameDescriptionTagP "param"
-    returnP :: Parse Tag
     returnP = Return <$> descriptionTagP "return"
-    throwsP :: Parse Tag
     throwsP = Throws <$> name <*> description
       where
         (name, description) = nameDescriptionTagP "throws"
-    versionP :: Parse Tag
     versionP = Version <$> descriptionTagP "version"
 
 test_tagP :: Test
@@ -138,7 +117,10 @@ oneLineCommentP p =
         let (x, _) = x0
         pure x
 
--- >>> P.parse (multiLineCommentP (many anyChar)) "/**\n* The Foo class \n*/hi"
+trimLeading :: Parse a -> Parse a
+trimLeading p = wsP (many (P.string "*")) *> many (wsP (P.string "*\n")) *> wsP (many (P.string "*")) *> p 
+
+-- >>> P.parse (multiLineCommentP (many anyChar)) "/**\n * \n* The Foo class \n*/hi"
 -- Right "The Foo class \n"
 
 -- >>> P.parse ((multiLineCommentP (many anyChar)) *> many anyChar) "/**\n* Hi\n* @param x the x value\n*/ hi hi public class Foo {}"
@@ -148,7 +130,7 @@ multiLineCommentP :: Parse a -> Parse a
 multiLineCommentP p =
   wsP (P.string "/**") *> wsP P.endCommentP
     >>= \s ->
-      case P.doParse (wsP (P.string "*") *> p) s of
+      case P.doParse (trimLeading p) s of
         Nothing -> pure (error "No parses")
         Just x0 -> do
           let (x, str) = x0
@@ -198,11 +180,14 @@ test_classP =
 -- >>> P.parse interfaceMethodP "private void bar();"
 -- Right (Method (JavaDocHeader (Description "") []) (Name "bar"))
 
+-- >>> P.parse interfaceMethodP "/**\n * \n * Hi\n*/\nprivate void bar();"
+-- Right (Method (JavaDocHeader (Description "Hi\n") []) (Name "bar"))
+
 interfaceMethodP :: Parse JavaDocComment
-interfaceMethodP = Method <$> header <*> name <* wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")") <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
+interfaceMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
-    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    tags = wsP (many (trimLeading tagP <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
@@ -210,7 +195,7 @@ interfaceMethodP = Method <$> header <*> name <* wsP (P.string "(") <* many (P.s
 -- Right "/**\n*\n* Hi\n*/\npublic void foo(){}"
 
 classMethodP :: Parse JavaDocComment
-classMethodP = Method <$> header <*> name <* wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")") <* many (P.satisfy (/= '{')) <* wsP (P.string "{") <* many (P.satisfy (/= '}')) <* wsP (P.string "}")
+classMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
     tags = 
@@ -340,16 +325,9 @@ instance Arbitrary String where
 
 -- Read in a file example/Foo.java as a string and run javaDocP on the string
 -- >>> main
-
--- main :: IO ()
--- main = do
---   contents <- readFile "example/Test.java"
---   print (P.parse javaDocP contents)
-
 main :: IO ()
 main = do
   contents <- readFile "example/Test.java"
-  print contents
   let parsedDoc = P.parse javaDocP contents
    in case parsedDoc of
         Left err -> error "unable to parse"

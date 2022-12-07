@@ -1,6 +1,6 @@
 # Enum - Bar
 ## Description
-Enum Bar
+Enum Bar is an enum that does x and y.
  
 # Class - Test
 # Method - successfullyAttacked

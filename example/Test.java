@@ -7,6 +7,7 @@ enum Bar {
 public class Test {
   /**
    * This is a description of the method.
+   * 
    * @param incomingDamage incoming damage of the attack
    * @param damageType     type of damage being done
    * @version 1.05
