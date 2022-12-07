@@ -199,23 +199,24 @@ test_classP =
 -- Right (Method (JavaDocHeader (Description "") []) (Name "bar"))
 
 interfaceMethodP :: Parse JavaDocComment
-interfaceMethodP = Method <$> header <*> name <* wsP (P.string "();")
+interfaceMethodP = Method <$> header <*> name <* wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")") <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
     tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "void") *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
--- >>> P.parse (classMethodP *> (many anyChar)) "public void foo(){}"
--- Right "sup"
+-- >>> P.parse (wsP (many ((P.string "*" *> wsP (many (P.string "*\n"))))) *> (many anyChar)) "/**\n*\n* Hi\n*/\npublic void foo(){}"
+-- Right "/**\n*\n* Hi\n*/\npublic void foo(){}"
 
 classMethodP :: Parse JavaDocComment
-classMethodP = Method <$> header <*> name <* wsP (P.string "()") <* wsP (P.string "{") <* wsP (P.string "}")
+classMethodP = Method <$> header <*> name <* wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")") <* many (P.satisfy (/= '{')) <* wsP (P.string "{") <* many (P.satisfy (/= '}')) <* wsP (P.string "}")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
-    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    tags = 
+      wsP (many ((P.string "*" *> tagP) <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "void") *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 methodP :: Parse JavaDocComment
 methodP = wsP (interfaceMethodP <|> classMethodP)
@@ -241,6 +242,9 @@ classAndMethodP =
     c <- classP
     ms <- many methodP <* wsP (P.string "}")
     return (c : ms)
+
+--- >>> P.parse classAndMethodP "public class Test {\n  /**\n   * This is a description of the method.\n   *\n   * @param incomingDamage incoming damage of the attack\n   * @param damageType     type of damage being done\n   * @version 1.05\n   * @return how much damage actually landed\n   * @throws IllegalArgumentException incoming damage is negative\n   */\n  public int successfullyAttacked(int incomingDamage, String damageType) throws IllegalArgumentException {\n    return 0;\n  }\n}"
+-- Right [Class (JavaDocHeader (Description "") []) (Name "Test"),Method (JavaDocHeader (Description "This is a description of the method.\n   ") []) (Name "successfullyAttacked")]
 
 interfaceP :: Parse JavaDocComment
 interfaceP = Interface <$> header <*> name <* wsP (P.string "{")
@@ -345,6 +349,7 @@ instance Arbitrary String where
 main :: IO ()
 main = do
   contents <- readFile "example/Test.java"
+  print contents
   let parsedDoc = P.parse javaDocP contents
    in case parsedDoc of
         Left err -> error "unable to parse"

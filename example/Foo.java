@@ -16,7 +16,6 @@ enum Bar {
 /**
  * Class BarClass
  * @version 1.0
- * @since 1.0
  */
 class BarClass {
   // ...
