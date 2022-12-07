@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid lambda" #-}
 module DocParse where
 
 import Control.Applicative
@@ -9,14 +11,14 @@ import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck qualified as QC
 import qualified Data.Functor
 
--- prop_roundtrip_val :: Value -> Bool
--- prop_roundtrip_val v = P.parse valueP (pretty v) == Right v
-
--- prop_roundtrip_exp :: Expression -> Bool
--- prop_roundtrip_exp e = P.parse expP (pretty e) == Right e
-
--- prop_roundtrip_stat :: Statement -> Bool
--- prop_roundtrip_stat s = P.parse statementP (pretty s) == Right s
+stopAtString prefix = stopAtStringRec "" where
+  stopAtStringRec :: String -> String -> String
+  stopAtStringRec resAcc remainingStr = 
+    case remainingStr of
+      [] -> resAcc
+      _ -> do
+        if take (length prefix) remainingStr == prefix then resAcc
+        else stopAtStringRec (resAcc ++ [head remainingStr]) (tail remainingStr)
 
 -- Helper functions
 -- takes a parser, runs it, then skips over any whitespace characters occurring afterwards
@@ -35,6 +37,13 @@ test_wsP =
       P.parse (many (wsP P.alpha)) "a b \n   \t c" ~?= Right "abc"
     ]
 
+test_nlP :: Test
+test_nlP =
+  TestList
+    [ P.parse (nlP P.alpha) "a" ~?= Right 'a',
+      P.parse (many (nlP P.alpha)) "ab \n   \t c" ~?= Right "ab"
+    ]
+
 -- takes a parser, runs it, then returns any 'string' occurring afterwards
 stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
@@ -43,8 +52,8 @@ stringsP l = case l of
 
 -- takes a parser, runs it, and returns anything that's not a 'string' given
 
-testSkipStringsP :: Test
-testSkipStringsP =
+testStringsP :: Test
+testStringsP =
   TestList
     [ P.parse (stringsP ["public"]) "public class Foo {}" ~?= Right "public",
       P.parse (stringsP ["private"]) "private class Foo {}" ~?= Right "private",
@@ -60,16 +69,11 @@ anyChar = P.satisfy (const True)
 
 -- Parser for the string that comes directly after an @tag
 
--- @author name-text
-
--- >>> P.parse authorP "@author John Smith"
--- Right (Author (Description "John Smith"))
-
 -- Given a string "tag", returns a parser for the string that comes directly after the @tag
 -- >>> P.parse (descriptionTagP "author") "@author John Smith"
 -- Right (Description "John Smith")
 descriptionTagP :: String -> Parse Description
-descriptionTagP tag  = Description <$> (wsP (P.string tagString) *> wsP (many anyChar))
+descriptionTagP tag  = Description <$> (wsP (P.string tagString) *> wsP (many (P.satisfy (/= '\n'))))
   where
     tagString = "@" ++ tag
 
@@ -111,64 +115,64 @@ test_tagP =
 -- Extract inner values of a comment. Comment can either by enclosed by /* */ (multiline) or // (single line)
 
 -- >>> P.parse (commentP (many anyChar)) "// hi param x the x value\n sup"
--- Left "No parses"
+-- Right "hi param x the x value"
 
 -- >>> P.parse (commentP (JavaDocHeader <$> (Description <$> many (P.satisfy (/= '@'))) <*> (many tagP))) "/** \n Hi @param x the x value\n*/ public class Foo {}"
 -- Right (JavaDocHeader (Description "Hi ") [Param (Name "x") (Description "the x value")])
 
 
+-- >>> P.parse (oneLineCommentP (many anyChar)) "// hi param x the x value\n sup"
+-- Right "hi param x the x value"
+oneLineCommentP :: Parse a -> Parse a
+oneLineCommentP p =  (wsP (P.string "//") *> many (P.satisfy (/= '\n'))) >>= -- apply result into P.doParse p
+  \s -> case P.doParse p s of
+    Nothing -> pure (error "No parses")
+    Just x0 -> do
+      let (x, _) = x0
+      pure x
+
+-- >>> P.parse (multiLineCommentP (many anyChar)) "/**\n* The Foo class \n*/hi"
+-- Right "The Foo class \n"
+
+-- >>> P.parse ((multiLineCommentP (many anyChar)) *> many anyChar) "/**\n* Hi\n* @param x the x value\n*/ hi hi public class Foo {}"
+-- Right "hi hi public class Foo {}"
+
+multiLineCommentP :: Parse a -> Parse a
+multiLineCommentP p = wsP (P.string "/**") *> wsP P.endCommentP >>=
+  \s -> 
+    case P.doParse (wsP (P.string "*") *> p) s of
+      Nothing -> pure (error "No parses")
+      Just x0 -> do
+        let (x, str) = x0
+        pure x
+  <* wsP (stringsP ["*/"])
+
 
 commentP :: Parse a -> Parse a
 commentP p =
-  -- nlP (wsP (oneLineCommentP p <|> multiLineCommentP p))
-  nlP (wsP (multiLineCommentP p))
-  where
-    oneLineCommentP :: Parse a -> Parse a
-    oneLineCommentP p =  wsP (P.string "//") *> nlP p <* wsP (P.satisfy (== '\n'))
-    multiLineCommentP :: Parse a -> Parse a
-    multiLineCommentP p = wsP (P.string "/**") *> nlP p <* nlP (wsP (many (P.satisfy (/= '\n')))) <* wsP (stringsP ["*/"]) where
-      -- TODO: broken
-      middleStatements = -- strip any leading * if they're the first character (before any characters or \n) or if they're preceded by a \n
-        P.satisfy (/= '*') <|> wsP (stringsP ["*"]) *> wsP (P.satisfy (== '/')) *> wsP (P.satisfy (== '\n'))
-
-
--- TODO: slightly broken
-commentP' :: Parse String
-commentP' = wsP (oneLineCommentP <|> multiLineCommentP) <* stringsP ["\n"]
-  where
-    oneLineCommentP :: Parse String
-    oneLineCommentP =  wsP (P.string "//") *> stringsP ["\n"] *> nlP (wsP (many (P.satisfy (/= '\n'))))
-    multiLineCommentP :: Parse String
-    multiLineCommentP = wsP (P.string "/**") *> stringsP ["\n"] *> nlP (wsP (many (P.satisfy (/= '\n')))) <* wsP (stringsP ["*/"])  where
-      -- TODO: broken
-      middleStatements = -- strip any leading * if they're the first character (before any characters or \n) or if they're preceded by a \n
-        P.satisfy (/= '*') <|> wsP (stringsP ["*"]) *> wsP (P.satisfy (== '/')) *> wsP (P.satisfy (== '\n'))
-
--- JavaDocComment parsers
+  nlP (wsP (oneLineCommentP p <|> multiLineCommentP p))
 
 -- >>> P.parse classP "public class Foo {}"
 -- Right (Class (JavaDocHeader (Description "") []) (Name "Foo"))
 
--- >>> P.parse classP "/**\nThe Foo class \n*/\nclass Foo { \n // blah \n } \n"
--- Left "No parses"
+-- >>> P.parse classP "/**\n* The Foo class \n*/\nclass Foo { \n // blah \n } \n"
+-- Right (Class (JavaDocHeader (Description "The Foo class \n") []) (Name "Foo"))
 
--- >>> P.parse classP "/** \n Hi \n@param x the x value\n*/\npublic class Foo {}"
--- Right (Class (JavaDocHeader (Description "Hi \n") [Param (Name "x") (Description "the x value")]) (Name "Foo"))
-
+-- >>> P.parse classP "/**\n* The Foo class \n* @param x the x value\n*/\npublic class Foo {}"
+-- Right (Class (JavaDocHeader (Description "The Foo class \n") [Param (Name "x") (Description "the x value")]) (Name "Foo"))
 
 classP = Class <$> header <*> name
   where
-    -- TODO: currently description is body, but that's not true
     -- comment is any string that is not a tagP
-    descriptionP = Description <$> many (P.satisfy (/= '@'))
-    tags = many tagP
+    descriptionP = Description <$> many (P.satisfy (/= '*'))
+    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
 
     -- description = Description <$> nlP (commentP (many (P.satisfy (/= '@'))))
     name = -- skips over any characters not in 'class' string until arriving at class
       Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "class") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
--- TODO: Public vs private classes?
+-- Public vs private classes?
 test_classP :: Test
 test_classP = TestList [
     P.parse classP "class Foo {}" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
@@ -177,9 +181,9 @@ test_classP = TestList [
     P.parse classP "class Foo { /* blah */ }" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
     P.parse classP "class Foo { \n // blah \n }" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
     P.parse classP "class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
-    P.parse classP "/**\nThe Foo class */ \nclass Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class") []) (Name "Foo")),
-    P.parse classP "/** The Foo class \n * @version 1.0 \n */ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "Foo")),
-    P.parse classP "/** The Foo class \n * @version 1.0 \n * @param x the x value \n */ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
+    P.parse classP "/**\n* The Foo class\n*/\nclass Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") []) (Name "Foo")),
+    P.parse classP "/**\n* The Foo class\n* @version 1.0\n */ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "Foo")),
+    P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
   ]
 
 interfaceMethodP :: Parse JavaDocComment
@@ -242,3 +246,6 @@ test_javaDocCommentP =
 -- JavaDoc parsers
 javaDocP :: Parse JavaDoc
 javaDocP = undefined
+
+-- TODO: roundtrip testing to print out the parsed value
+-- TODO: add param auto?

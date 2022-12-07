@@ -1,7 +1,13 @@
 module Syntax where
 
 newtype Name = Name String deriving (Eq, Show)
-newtype Description = Description String deriving (Eq, Show)
+newtype Description = Description String deriving (Eq, Show) -- TODO: list of DescriptionContent
+newtype Link = Link String deriving (Eq, Show)
+
+data DescriptionContent
+  = Text String
+    | Placeholder String
+    | Reference String Link
 
 -- @tag
 -- tags: https://www.tutorialspoint.com/java/java_documentation.htm
@@ -25,3 +31,4 @@ data JavaDocComment
   deriving (Eq, Show)
 
 newtype JavaDoc = JavaDoc [JavaDocComment] deriving (Eq, Show)
+-- TODO: add metadata (e.g name of file)

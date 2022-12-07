@@ -6,8 +6,8 @@
 module Parse(Parse, doParse, get, eof, filter, 
                           parse, parseFromFile, ParseError,
                           satisfy, alpha, digit, upper, lower, space,
-                          char, string, int, peek,
-                          chainl1, chainl, choice,
+                          char, string, int,
+                          chainl1, chainl, choice, endCommentP,
                           between, sepBy1, sepBy) where
 
 import Prelude hiding (filter)
@@ -16,12 +16,16 @@ import Control.Applicative (Alternative(..))
 import Data.Char
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
-import Control.Monad (guard)
+import Control.Monad (guard, (>=>))
 import Data.Foldable (asum)
 
 
 -- definition of the parser type
 newtype Parse a = P { doParse :: String -> Maybe (a, String) }
+
+instance Monad Parse where
+  return a = P $ \s -> Just (a, s)
+  p >>= f = P (doParse p >=> (\ (a, s') -> doParse (f a) s'))
 
 instance Functor Parse where
   fmap :: (a -> b) -> Parse a -> Parse b
@@ -107,6 +111,7 @@ parseFromFile parser filename = do
 satisfy :: (Char -> Bool) -> Parse Char
 satisfy p = filter p get
 
+
 -- | Parses for specific sorts of characters
 alpha, digit, upper, lower, space :: Parse Char
 alpha = satisfy isAlpha
@@ -114,6 +119,10 @@ digit = satisfy isDigit
 upper = satisfy isUpper
 lower = satisfy isLower
 space = satisfy isSpace
+
+-- takes a parser, runs it, and returns everything
+anyChar :: Parse Char
+anyChar = satisfy (const True)
 
 -- | Parses and returns the specified character
 -- succeeds only if the input is exactly that character
@@ -125,14 +134,55 @@ char c = satisfy (c ==)
 string :: String -> Parse String
 string = foldr (\c p -> (:) <$> char c <*> p) (pure "")
 
+-- >>> parse (endCommentP *> (many anyChar)) "Hi\n* @param x the x value\n*/ public class Foo {}" 
+-- Right " public class Foo {}"
+
+-- | Parse and returns everything before the first occurrence of the "*/" string
+endCommentP :: Parse String
+endCommentP = -- if first character doesn't match * then continue
+              do c <- get
+                 if c == '*'
+                   then do c' <- get
+                           if c' == '/'
+                             then return ""
+                             else (c:) <$> endCommentP
+                   else (c:) <$> endCommentP
+
+-- >>> parse (stopAtEndComment "") "hjhfhdjhi*/hi sup"
+-- -- Right ""
+-- stopAtEndComment :: String -> Parse String
+-- stopAtEndComment acc = -- peek next two characters, and if it's "*/", stop
+--   let res = peekN 2 in
+--   do
+--     -- if no new characters, return acc
+--     case res of
+--       Nothing -> return acc
+--       Just nextTwoChars -> do
+--         if nextTwoChars == "*/" then return acc
+--         else do
+--           -- otherwise, add next character to acc and recurse
+--           let nextChar = head nextTwoChars
+--           stopAtEndComment (acc ++ [nextChar])
+
 -- | succeed only if the input is a (positive or negative) integer
 int :: Parse Int
 int = read <$> ((++) <$> string "-" <*> some digit <|> some digit)
 
-peek :: Maybe Char
-peek = do 
-  res <- doParse get "" 
-  return $ fst res
+-- -- >>> peek "hi"
+-- peek :: Maybe Char
+-- peek = do 
+--   res <- doParse get "" 
+--   return $ fst res
+
+-- -- Peek the next n characters
+-- peekN :: Int -> Maybe String
+-- peekN n = peekNRec n "" where
+--   peekNRec :: Int -> String -> Maybe String
+--   peekNRec n acc = 
+--     if n == 0 then Just acc
+--     else do
+--       c <- peek
+--       peekNRec (n - 1) (acc ++ [c])
 
 -- | Parses one or more occurrences of @p@ separated by binary operator
 -- parser @pop@.  Returns a value produced by a /left/ associative application
