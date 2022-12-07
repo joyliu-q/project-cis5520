@@ -220,13 +220,17 @@ test_methodP = TestList [
     P.parse methodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
   ]
 
+-- >>> P.parse (classAndMethodP *> (many anyChar)) "public class Foo { public void bar(){} }"
+-- Right ""
+
+
 -- >>> P.parse classAndMethodP "public class Foo { public void bar(){} }"
 -- Right [Class (JavaDocHeader (Description "") []) (Name "Foo"),Method (JavaDocHeader (Description "") []) (Name "bar")]
 classAndMethodP :: Parse [JavaDocComment]
 classAndMethodP =
   do
     c <- classP
-    ms <- many methodP
+    ms <- many methodP <* wsP (P.string "}")
     return (c:ms)
 
 interfaceP :: Parse JavaDocComment
@@ -253,11 +257,14 @@ interfaceAndMethodP :: Parse [JavaDocComment]
 interfaceAndMethodP =
   do
     c <- interfaceP
-    ms <- many methodP
+    ms <- many methodP <* wsP (P.string "}")
     return (c:ms)
 
+-- >>> P.parse (enumP *> many anyChar) "public enum Foo {}"
+-- Right ""
+
 enumP :: Parse JavaDocComment
-enumP = Enum <$> header <*> name
+enumP = Enum <$> header <*> name <* wsP (P.string "{") <* wsP (P.string "}")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
     tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
@@ -277,8 +284,13 @@ test_enumP = TestList [
 javaDocCommentP :: Parse JavaDocComment
 javaDocCommentP = wsP (classP <|> interfaceP <|> enumP <|> methodP)
 
+-- >>> P.parse javaDocCommentsP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}"
+-- Right [Class (JavaDocHeader (Description "") []) (Name "Foo"),Method (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "bar")]
 javaDocCommentsP :: Parse [JavaDocComment]
-javaDocCommentsP = wsP (classAndMethodP <|> interfaceAndMethodP) <|> many javaDocCommentP
+javaDocCommentsP = do
+  c <- wsP (classAndMethodP <|> interfaceAndMethodP) <|> many javaDocCommentP
+  ms <- many javaDocCommentP
+  return (c ++ ms)
 
 -- TODO: add test cases
 test_javaDocCommentP :: Test
@@ -287,7 +299,7 @@ test_javaDocCommentP =
 
 -- JavaDoc parsers
 javaDocP :: Parse JavaDoc
-javaDocP = JavaDoc <$> many javaDocCommentP
+javaDocP = JavaDoc <$> javaDocCommentsP
 
 -- TODO: roundtrip testing to print out the parsed value
 -- TODO: add param auto?

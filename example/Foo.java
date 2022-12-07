@@ -1,10 +1,13 @@
-/**
-  * This is a simple example of a Java program.
-  * @author Your Name
+public class Foo {
+  /**
+  * The Foo class
   * @version 1.0
   */
-public class Foo {
-    public static void main(String[] args) {
-        System.out.println("Hello, world!");
-    }
+  public void bar() {
+  }
+}
+/** 
+* Enum Bar
+*/
+enum Bar {
 }
