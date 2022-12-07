@@ -211,7 +211,12 @@ test_methodP = TestList [
   ]
 
 interfaceP :: Parse JavaDocComment
-interfaceP = undefined
+interfaceP = Interface <$> header <*> name
+  where
+    descriptionP = Description <$> many (P.satisfy (/= '*'))
+    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "interface") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 test_interfaceP :: Test
 test_interfaceP = TestList [
@@ -221,8 +226,8 @@ test_interfaceP = TestList [
     P.parse interfaceP "interface Foo { /* blah */ }" ~?= Right (Interface (JavaDocHeader (Description "") []) (Name "Foo")),
     P.parse interfaceP "interface Foo { \n // blah \n }" ~?= Right (Interface (JavaDocHeader (Description "") []) (Name "Foo")),
     P.parse interfaceP "interface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "") []) (Name "Foo")),
-    P.parse interfaceP "/** The Foo interface \n * @version 1.0 \n */ \n interface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0")]) (Name "Foo")),
-    P.parse interfaceP "/** The Foo interface \n * @version 1.0 \n * @param x the x value \n */ \n interface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
+    P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface\n") [Version (Description "1.0")]) (Name "Foo")),
+    P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n* @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
   ]
 
 enumP :: Parse JavaDocComment
