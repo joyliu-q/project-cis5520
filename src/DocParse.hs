@@ -161,7 +161,7 @@ commentP p =
 -- >>> P.parse classP "/**\n* The Foo class \n* @param x the x value\n*/\npublic class Foo {}"
 -- Right (Class (JavaDocHeader (Description "The Foo class \n") [Param (Name "x") (Description "the x value")]) (Name "Foo"))
 
-classP = Class <$> header <*> name <* wsP (P.string "{") <* wsP (P.string "}")
+classP = Class <$> header <*> name <* wsP (P.string "{")
   where
     -- comment is any string that is not a tagP
     descriptionP = Description <$> many (P.satisfy (/= '*'))
@@ -220,8 +220,17 @@ test_methodP = TestList [
     P.parse methodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
   ]
 
+-- >>> P.parse classAndMethodP "public class Foo { public void bar(){} }"
+-- Right [Class (JavaDocHeader (Description "") []) (Name "Foo"),Method (JavaDocHeader (Description "") []) (Name "bar")]
+classAndMethodP :: Parse [JavaDocComment]
+classAndMethodP =
+  do
+    c <- classP
+    ms <- many methodP
+    return (c:ms)
+
 interfaceP :: Parse JavaDocComment
-interfaceP = Interface <$> header <*> name
+interfaceP = Interface <$> header <*> name <* wsP (P.string "{")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
     tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
@@ -239,6 +248,13 @@ test_interfaceP = TestList [
     P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface\n") [Version (Description "1.0")]) (Name "Foo")),
     P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n* @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
   ]
+
+interfaceAndMethodP :: Parse [JavaDocComment]
+interfaceAndMethodP =
+  do
+    c <- interfaceP
+    ms <- many methodP
+    return (c:ms)
 
 enumP :: Parse JavaDocComment
 enumP = Enum <$> header <*> name
@@ -261,6 +277,9 @@ test_enumP = TestList [
 javaDocCommentP :: Parse JavaDocComment
 javaDocCommentP = wsP (classP <|> interfaceP <|> enumP <|> methodP)
 
+javaDocCommentsP :: Parse [JavaDocComment]
+javaDocCommentsP = wsP (classAndMethodP <|> interfaceAndMethodP) <|> many javaDocCommentP
+
 -- TODO: add test cases
 test_javaDocCommentP :: Test
 test_javaDocCommentP =
@@ -275,5 +294,5 @@ javaDocP = JavaDoc <$> many javaDocCommentP
 test_javaDocP :: Test
 test_javaDocP =
   TestList [
-    P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
+    P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "bar")])
   ]
