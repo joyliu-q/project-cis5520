@@ -296,3 +296,11 @@ test_javaDocP =
   TestList [
     P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "bar")])
   ]
+
+-- Read in a file example/Foo.java as a string and run javaDocP on the string
+-- >>> main
+main :: IO ()
+main = do
+  contents <- readFile "example/Foo.java"
+  print (P.parse javaDocP contents)
+
