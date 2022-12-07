@@ -161,7 +161,7 @@ commentP p =
 -- >>> P.parse classP "/**\n* The Foo class \n* @param x the x value\n*/\npublic class Foo {}"
 -- Right (Class (JavaDocHeader (Description "The Foo class \n") [Param (Name "x") (Description "the x value")]) (Name "Foo"))
 
-classP = Class <$> header <*> name
+classP = Class <$> header <*> name <* wsP (P.string "{") <* wsP (P.string "}")
   where
     -- comment is any string that is not a tagP
     descriptionP = Description <$> many (P.satisfy (/= '*'))
@@ -186,28 +186,38 @@ test_classP = TestList [
     P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
   ]
 
+-- >>> P.parse interfaceMethodP "private void bar();"
+-- Right (Method (JavaDocHeader (Description "") []) (Name "bar"))
+
 interfaceMethodP :: Parse JavaDocComment
-interfaceMethodP = Method <$> header <*> name
+interfaceMethodP = Method <$> header <*> name <* wsP (P.string "();")
   where
     descriptionP = Description <$> many (P.satisfy (/= '*'))
     tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "void") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
--- TODO: differentiate between interfaceMethod & normal method
+-- >>> P.parse (classMethodP *> (many anyChar)) "public void foo(){}"
+-- Right "sup"
+
 classMethodP :: Parse JavaDocComment
-classMethodP = interfaceMethodP
+classMethodP = Method <$> header <*> name <* wsP (P.string "()") <* wsP (P.string "{") <* wsP (P.string "}")
+  where
+    descriptionP = Description <$> many (P.satisfy (/= '*'))
+    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "void") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 methodP :: Parse JavaDocComment
 methodP = wsP (interfaceMethodP <|> classMethodP)
 
 test_methodP :: Test
 test_methodP = TestList [
-    P.parse interfaceMethodP "void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "public void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "private void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "void bar(); // comment here" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
+    P.parse methodP "void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse methodP "public void bar(){}" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse methodP "private void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse methodP "void bar(); // comment here" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse methodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
   ]
 
 interfaceP :: Parse JavaDocComment
@@ -262,3 +272,8 @@ javaDocP = JavaDoc <$> many javaDocCommentP
 
 -- TODO: roundtrip testing to print out the parsed value
 -- TODO: add param auto?
+test_javaDocP :: Test
+test_javaDocP =
+  TestList [
+    P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
+  ]
