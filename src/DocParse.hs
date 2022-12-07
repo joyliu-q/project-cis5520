@@ -187,24 +187,27 @@ test_classP = TestList [
   ]
 
 interfaceMethodP :: Parse JavaDocComment
-interfaceMethodP = undefined
+interfaceMethodP = Method <$> header <*> name
+  where
+    descriptionP = Description <$> many (P.satisfy (/= '*'))
+    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "void") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
+-- TODO: differentiate between interfaceMethod & normal method
 classMethodP :: Parse JavaDocComment
-classMethodP = undefined
+classMethodP = interfaceMethodP
 
 methodP :: Parse JavaDocComment
 methodP = wsP (interfaceMethodP <|> classMethodP)
 
 test_methodP :: Test
 test_methodP = TestList [
-    P.parse interfaceMethodP "interface Foo { void bar(); }" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "class Foo { public void bar(); }" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "interface Foo { private void bar(); }" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "interface Foo { void bar(); /* blah */ }" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "class Foo { void bar(); \n // blah \n }" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "interface Foo { void bar(); \n // blah \n } \n" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-    P.parse interfaceMethodP "class Foo { /** The bar method \n * @version 1.0 \n */ \n void bar(); \n // blah \n } \n" ~?= Right (Method (JavaDocHeader (Description "The bar method") [Version (Description "1.0")]) (Name "bar")),
-    P.parse interfaceMethodP "interface Foo { /** The bar method \n * @version 1.0 \n * @param x the x value \n */ \n void bar(); \n // blah \n } \n" ~?= Right (Method (JavaDocHeader (Description "The bar method") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "bar"))
+    P.parse interfaceMethodP "void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse interfaceMethodP "public void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse interfaceMethodP "private void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse interfaceMethodP "void bar(); // comment here" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+    P.parse interfaceMethodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
   ]
 
 interfaceP :: Parse JavaDocComment
