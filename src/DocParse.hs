@@ -231,7 +231,12 @@ test_interfaceP = TestList [
   ]
 
 enumP :: Parse JavaDocComment
-enumP = undefined
+enumP = Enum <$> header <*> name
+  where
+    descriptionP = Description <$> many (P.satisfy (/= '*'))
+    tags = wsP (many ((P.string "*" *> tagP) <|> tagP))
+    header = commentP descriptionP <|> Description <$> wsP (P.string "")
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "enum") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 test_enumP :: Test
 test_enumP = TestList [
@@ -253,7 +258,7 @@ test_javaDocCommentP =
 
 -- JavaDoc parsers
 javaDocP :: Parse JavaDoc
-javaDocP = undefined
+javaDocP = JavaDoc <$> many javaDocCommentP
 
 -- TODO: roundtrip testing to print out the parsed value
 -- TODO: add param auto?
