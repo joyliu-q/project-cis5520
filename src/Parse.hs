@@ -56,6 +56,20 @@ firstJust :: Maybe a -> Maybe a -> Maybe a
 firstJust (Just x) _ = Just x
 firstJust Nothing  y = y
 
+line :: Parse a -> Parse a 
+line p = (many (satisfy (/= '\n')) <* many (satisfy isSpace))
+  >>= \s ->  case doParse p s of -- apply result into P.doParse p
+    Nothing -> pure (error "No parses ok")
+    Just x0 -> do
+      let (x, _) = x0
+      pure x
+
+-- >>> parse (collapseLines' (many (satisfy (const True)))) "hello world\n sup"
+
+collapseLines' :: Parse String -> Parse String
+collapseLines' p = many (line p) >>= \case
+  [] -> pure ""
+  s1 : s2 -> undefined
 
 -- | Return the next character from the input
 get :: Parse Char
