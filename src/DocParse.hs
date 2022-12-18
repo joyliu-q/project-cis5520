@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use $>" #-}
 module DocParse where
 
 import Control.Applicative
@@ -123,7 +125,9 @@ processCommentLine s =
         hd : tl -> 
           let trimEnd = dropWhileEnd Char.isSpace hd in
           let trimStart = dropWhile Char.isSpace trimEnd in
-          (trimStart ++ ['\n']) ++ process tl
+          let removeStar = dropWhile (== '*') trimStart in
+          let removeStar' = dropWhile Char.isSpace removeStar in
+          (removeStar' ++ ['\n']) ++ process tl
   in
   process sList
 
@@ -144,7 +148,10 @@ commentP p =
   nlP (wsP (oneLineCommentP p <|> multiLineCommentP p))
 
 -- Class & Interface Parsers
-descriptionP = Description <$> (many (P.satisfy (/= '*')) >>= 
+-- >>> P.parse descriptionP "/*\n * This is a description\n */"
+-- Right (Description "/")
+
+descriptionP = Description <$> (many (P.satisfy (/= '@')) >>= 
   \s -> 
     let trimEnd = dropWhileEnd Char.isSpace s in
     let trimStart = dropWhile Char.isSpace trimEnd in
@@ -220,26 +227,40 @@ test_interfaceP =
       P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n* @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
 
+-- >>> P.parse (fieldCommentP *> many anyChar) "/**\n blah\n */\nHi there;"
+-- Right ""
+fieldCommentP :: Parse JavaDocComment
+fieldCommentP = Field <$> header <*> name <* wsP (P.string ";")
+  where
+    header = -- Description <$> commentP (many anyChar)
+      Description <$> (commentP (many anyChar) >>= \d ->
+        let trimEnd = dropWhileEnd Char.isSpace d in 
+        return trimEnd)
+    name = Name <$> (wsP (many (P.satisfy Char.isAlphaNum)) *> wsP (many (P.satisfy Char.isAlphaNum))) 
+
 classAndMethodP :: Parse [JavaDocComment]
 classAndMethodP =
   do
     c <- classP
-    ms <- many classMethodP
+    ms <- many (classMethodP <|> fieldCommentP)
     res <- wsP (P.string "}")
     return (c : ms)
 
+-- >>> P.parse (interfaceP *> many (interfaceMethodP <|> fieldCommentP) *> many anyChar) "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}"
+-- Right "}"
 interfaceAndMethodP :: Parse [JavaDocComment]
 interfaceAndMethodP =
   do
     c <- interfaceP
-    ms <- many interfaceMethodP
+    ms <- many (interfaceMethodP <|> fieldCommentP)
     res <- wsP (P.string "}")
     return (c : ms)
 
 test_interfaceAndMethodP :: Test
 test_interfaceAndMethodP =
   TestList
-    [ P.parse interfaceAndMethodP "public interface Test {\n  /**\n   * This is a description of the method.\n   *\n   * @param incomingDamage incoming damage of the attack\n   * @param damageType     type of damage being done\n   * @version 1.05\n   * @return how much damage actually landed\n   * @throws IllegalArgumentException incoming damage is negative\n   */\n  public int successfullyAttacked(int incomingDamage, String damageType) throws IllegalArgumentException;\n}" ~?= Right [Interface (JavaDocHeader (Description "") []) (Name "Test"),Method (JavaDocHeader (Description "This is a description of the method.") []) (Name "successfullyAttacked")]
+    [ 
+      P.parse interfaceAndMethodP "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}" ~?= Right [Interface (JavaDocHeader (Description "") []) (Name "Test"),Field (Description "Hi") (Name "foo")]
     ]
 
 -- Enum Parsers
@@ -262,7 +283,7 @@ test_enumP =
 
 -- JavaDoc Parsers
 javaDocCommentP :: Parse [JavaDocComment]
-javaDocCommentP = classAndMethodP <|> interfaceAndMethodP <|> commentToSingleton enumP where
+javaDocCommentP = wsP (classAndMethodP <|> interfaceAndMethodP <|> commentToSingleton enumP) where
   commentToSingleton p = do
   c <- p
   return [c]
@@ -271,6 +292,10 @@ javaDocCommentsP :: Parse [JavaDocComment]
 javaDocCommentsP = do
   res <- many javaDocCommentP
   return (concat res)
+  where
+  commentToSingleton p = do
+  c <- p
+  return [c]
 
 test_javaDocCommentP :: Test
 test_javaDocCommentP =
@@ -323,6 +348,8 @@ generateJavaDocCommentText jdc = case jdc of
     "/**\n" ++ " * " ++ d ++ "*/\n" ++ "public enum " ++ n ++ " {\n}\n"
   Method (JavaDocHeader (Description d) tags) (Name n) ->
     "/**\n" ++ " * " ++ d ++ "\n" ++ generateTagsText tags ++ "*/\n" ++ "public void " ++ n ++ "() {\n}\n"
+  Field (Description d) (Name n) ->
+    "/**\n" ++ " * " ++ d ++ "\n" ++ "*/\n" ++ "public String " ++ n ++ ";\n"
 
 generateJavaDocText :: JavaDoc -> String
 generateJavaDocText (JavaDoc jdc) = case jdc of
@@ -330,16 +357,6 @@ generateJavaDocText (JavaDoc jdc) = case jdc of
   (x : xs) -> generateJavaDocCommentText x ++ "\n\n" ++ generateJavaDocText (JavaDoc xs)
 
 -- Quickcheck roundtrip tests
--- >>> generateJavaDocText (JavaDoc [Enum (Description "") (Name "Pobk"),Class (JavaDocHeader (Description "ic") [Throws (Name "Rx") (Description "qyo")]) (Name "Ym"),Enum (Description "") (Name "Fioh")])
--- "/**\n * */\npublic enum Pobk {\n}\n\n\n/**\n * ic\n * @throws Rx qyo\n*/\npublic class Ym {\n}\n\n\n/**\n * */\npublic enum Fioh {\n}\n\n\n"
-
--- >>> P.parse javaDocP "/**\n * */\npublic enum Pobk {\n}\n\n\n/**\n * ic\n * @throws Rx qyo\n*/\npublic class Ym {\n}\n\n\n/**\n * */\npublic enum Fioh {\n}\n\n\n"
--- Right (JavaDoc [Enum (Description "") (Name "Pobk"),Class (JavaDocHeader (Description "ic") [Throws (Name "Rx") (Description "qyo")]) (Name "Ym")])
-
--- generateJavaDocText (JavaDoc [Enum (Description "") (Name "Pobk"),Class (JavaDocHeader (Description "ic") [Throws (Name "Rx") (Description "qyo")]) (Name "Ym"),Enum (Description "") (Name "Fioh")])
--- generateJavaDocTAXT (JavaDoc [Enum (Description "") (Name "Pobk"),Class (JavaDocHeader (Description "ic") [Throws (Name "Rx") (Description "qyo")]) (Name "Ym")])
-
-
 prop_roundtrip :: JavaDoc -> Bool
 prop_roundtrip jd =
   let javaDocStr = generateJavaDocText jd

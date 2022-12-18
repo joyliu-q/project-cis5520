@@ -32,6 +32,7 @@ data JavaDocComment
   | Method JavaDocHeader Name
   | Interface JavaDocHeader Name
   | Enum Description Name
+  | Field Description Name
   deriving (Eq, Show)
 
 newtype JavaDoc = JavaDoc [JavaDocComment] deriving (Eq, Show)
