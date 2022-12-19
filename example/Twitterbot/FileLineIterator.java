@@ -76,7 +76,6 @@ public class FileLineIterator implements Iterator<String> {
      * @return a boolean indicating whether the FileLineIterator can produce
      *         another line from the file
      */
-    @Override
     public boolean hasNext() {
         return false; // Complete this method.
     }
@@ -95,7 +94,6 @@ public class FileLineIterator implements Iterator<String> {
      * @throws java.util.NoSuchElementException if there is no more data in the
      *                                          file
      */
-    @Override
     public String next() {
         return null; // Complete this method.
 

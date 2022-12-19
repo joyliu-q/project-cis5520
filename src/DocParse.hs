@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use $>" #-}
 module DocParse where
 
 import Control.Applicative
 import Data.Char qualified as Char
 import Data.Functor qualified
+import Data.List
 import Display
 import Parse (Parse)
 import Parse qualified as P
@@ -12,7 +14,6 @@ import Syntax
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck
 import Test.QuickCheck qualified as QC
-import Data.List
 
 -- Helper functions
 wsP :: Parse a -> Parse a
@@ -21,28 +22,18 @@ wsP p = p <* many (P.satisfy Char.isSpace)
 nlP :: Parse a -> Parse a
 nlP p = many (P.satisfy (== '\n')) *> p <* many (P.satisfy (== '\n'))
 
--- TODO: not my proudest work
--- >>> P.parse braces "{{a}}"
--- Right ""
+-- >>> P.parse (braces2 *> (many anyChar)) "void func() { if (true) { while(true) {}; } else { that } return other;} blah"
+-- Right " blah"
+
+parenMatcher :: String -> Int -> String
+parenMatcher str cnt = case str of
+  ('{' : xs) -> parenMatcher xs (cnt + 1)
+  ('}' : xs) -> if cnt == 1 then xs else parenMatcher xs (cnt - 1)
+  (x : xs) -> parenMatcher xs cnt
+  [] -> ""
 
 braces :: Parse String
-braces = wsP (P.string "{") *> many anyChar >>= -- give remaining string, keep track of how many braces
-  \s -> do
-    -- keep going until braces count is 0, braces count starts of as 1 (} decreases it by 1, { increases it by 1)
-    let (s', count) = go s 1
-    if count == 0
-      then pure s'
-      else error "No parses"
-  where
-    go :: String -> Int -> (String, Int)
-    go s count = case count of
-      0 -> (s, count)
-      _ -> case s of
-        [] -> error "No parses"
-        hd : tl -> case hd of
-          '{' -> go tl (count + 1)
-          '}' -> go tl (count - 1)
-          _ -> go tl count
+braces = P.P $ \x -> Just ("", parenMatcher x 0)
 
 paren :: Parse String
 paren = wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")")
@@ -53,6 +44,7 @@ test_wsP =
     [ P.parse (wsP P.alpha) "a" ~?= Right 'a',
       P.parse (many (wsP P.alpha)) "a b \n   \t c" ~?= Right "abc"
     ]
+
 test_nlP :: Test
 test_nlP =
   TestList
@@ -70,6 +62,7 @@ stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
   [] -> pure []
   hd : tl -> P.string hd <|> stringsP tl
+
 testStringsP :: Test
 testStringsP =
   TestList
@@ -132,64 +125,72 @@ oneLineCommentP p =
         let (x, _) = x0
         pure x
 
-trimLeading :: Parse a -> Parse a
-trimLeading p = wsP (many (P.char ' ') *> many (P.string "*")) *> many (wsP (P.string "*\n")) *> wsP (many (P.char ' ') *> many (P.string "*")) *> p
-
 splitOn :: String -> Char -> [String]
 splitOn s c = case dropWhile (== c) s of
   "" -> []
-  s' -> 
-      -- keep the delimiter
-      let (w, s'') = break (== c) s' in
-      w : splitOn s'' c
+  s' ->
+    -- keep the delimiter
+    let (w, s'') = break (== c) s'
+     in w : splitOn s'' c
 
+-- >>> processCommentLine  " *\n *"
+-- ""
 processCommentLine :: String -> String
-processCommentLine s = 
-  let sList = splitOn s '\n' in 
-  let process list = case list of
-        [] -> ""
-        hd : tl -> 
-          let trimEnd = dropWhileEnd Char.isSpace hd in
-          let trimStart = dropWhile Char.isSpace trimEnd in
-          let removeStar = dropWhile (== '*') trimStart in
-          let removeStar' = dropWhile Char.isSpace removeStar in
-          (removeStar' ++ ['\n']) ++ process tl
-  in
-  process sList
+processCommentLine s =
+  let sList = splitOn s '\n'
+   in let process list = case list of
+            [] -> ""
+            hd : tl ->
+              let trimEnd = dropWhileEnd Char.isSpace hd -- " *\n *"
+                  trimStart = dropWhile Char.isSpace trimEnd --
+                  removeStar = dropWhile (== '*') trimStart --
+                  trimStart' = dropWhile Char.isSpace removeStar --
+               in trimStart' ++ process tl --
+       in process sList
 
+-- >>> P.parse (wsP (P.string "/**") *> wsP P.endCommentP) "/**\n* Description\n *\n *\n * first\n *\n */"
+-- Right "* Description\n *\n *\n * first\n *\n "
+
+-- >>> P.parse (multiLineCommentP2 (many anyChar)) "/**\n* Description\n *\n *\n * first\n *\n */"
+-- Right "Description\n\n\nfirst\n\n\n"
 multiLineCommentP :: Parse a -> Parse a
 multiLineCommentP p =
   wsP (P.string "/**") *> wsP P.endCommentP
     >>= \s ->
-      let processedS = processCommentLine s in
-      case P.doParse (trimLeading p) processedS of
-        Nothing -> pure (error "No parses")
-        Just x0 -> do
-          let (x, str) = x0
-          pure x
-        <* wsP (stringsP ["*/"])
+      let processedS = processCommentLine s
+       in case P.doParse p processedS of
+            Nothing -> pure (error "No parses")
+            Just x0 -> do
+              let (x, str) = x0
+              pure x
+            <* wsP (stringsP ["*/"])
 
 commentP :: Parse a -> Parse a
 commentP p =
   nlP (wsP (oneLineCommentP p <|> multiLineCommentP p))
 
 -- Class & Interface Parsers
--- >>> P.parse descriptionP "/*\n * This is a description\n */"
+-- >>> P.parse (descriptionP) "This is a description\n *\n* @param hi hello"
 -- Right (Description "/")
 
-descriptionP = Description <$> (many (P.satisfy (/= '@')) >>= 
-  \s -> 
-    let trimEnd = dropWhileEnd Char.isSpace s in
-    let trimStart = dropWhile Char.isSpace trimEnd in
-    pure trimStart)
+descriptionP =
+  Description
+    <$> ( many (P.satisfy (/= '@')) -- hello *
+            >>= \s ->
+              let trimEnd = dropWhileEnd Char.isSpace s -- "This is a description\n *\n* " -> "This is a description\n *\n*"
+                  trimStart = dropWhile Char.isSpace trimEnd -- "This is a description\n *\n*"
+               in pure trimStart
+        )
+
 tags = wsP (many ((wsP (P.string "*") *> tagP) <|> tagP))
+
 classP = Class <$> header <*> name <* wsP (P.string "{")
   where
     -- comment is any string that is not a tagP
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name =
       -- skips over any characters not in 'class' string until arriving at class
-      Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "class") *> wsP (many (P.satisfy Char.isAlphaNum)))
+      Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (P.string "class") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 test_classP :: Test
 test_classP =
@@ -202,26 +203,29 @@ test_classP =
       P.parse classP "class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
       P.parse classP "/**\n* The Foo class\n*/\nclass Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") []) (Name "Foo")),
       P.parse classP "/**\n* The Foo class\n* @version 1.0\n */ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "Foo")),
-      P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
+      P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
-
 
 interfaceMethodP :: Parse JavaDocComment
 interfaceMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
   where
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 classMethodP :: Parse JavaDocComment
 classMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
   where
-    tags =
-      wsP (many ((P.string "*" *> tagP) <|> tagP))
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
+
+constructorMethodP :: Parse JavaDocComment
+constructorMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
+  where
+    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha))
 
 methodP :: Parse JavaDocComment
-methodP = wsP (interfaceMethodP <|> classMethodP)
+methodP = wsP (interfaceMethodP <|> classMethodP <|> constructorMethodP)
 
 test_methodP :: Test
 test_methodP =
@@ -229,16 +233,18 @@ test_methodP =
     [ P.parse methodP "void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
       P.parse methodP "public void bar(){}" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
       P.parse methodP "private void bar();" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
+      P.parse methodP "private void bar(){ if (true) {}else{} \n return \n that;}" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
       P.parse methodP "void bar(); // comment here" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar")),
-      P.parse methodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method\n") [Version (Description "1.0")]) (Name "bar"))
+      P.parse methodP "/**\n* The bar method\n* @version 1.0\n*/\nvoid bar();" ~?= Right (Method (JavaDocHeader (Description "The bar method") [Version (Description "1.0")]) (Name "bar")),
+      P.parse methodP "public static void bar(){}" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar"))
     ]
 
 interfaceP :: Parse JavaDocComment
 interfaceP = Interface <$> header <*> name <* wsP (P.string "{")
   where
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = 
-      Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (P.string "interface") *> wsP (many (P.satisfy Char.isAlphaNum)))
+    name =
+      Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (P.string "interface") *> wsP (many (P.satisfy Char.isAlphaNum)))
 
 test_interfaceP :: Test
 test_interfaceP =
@@ -250,23 +256,26 @@ test_interfaceP =
       P.parse interfaceP "interface Foo { \n // blah \n }" ~?= Right (Interface (JavaDocHeader (Description "") []) (Name "Foo")),
       P.parse interfaceP "interface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "") []) (Name "Foo")),
       P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0")]) (Name "Foo")),
-      P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n* @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
+      P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n * @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
 
 fieldCommentP :: Parse JavaDocComment
 fieldCommentP = Field <$> header <*> name <* wsP (P.string ";")
   where
-    header = -- Description <$> commentP (many anyChar)
-      Description <$> (commentP (many anyChar) >>= \d ->
-        let trimEnd = dropWhileEnd Char.isSpace d in 
-        return trimEnd)
+    header =
+      -- Description <$> commentP (many anyChar)
+      Description
+        <$> ( commentP (many anyChar) >>= \d ->
+                let trimEnd = dropWhileEnd Char.isSpace d
+                 in return trimEnd
+            )
     name = Name <$> (wsP (stringsP ["static"]) *> wsP (stringsP ["final"]) *> wsP (many (P.satisfy (/= ' '))) *> wsP (many (P.satisfy (/= ' ')))) <* wsP (many (P.satisfy (/= ';')))
 
 classAndMethodP :: Parse [JavaDocComment]
 classAndMethodP =
   do
-    c <- classP
-    ms <- many (classMethodP <|> fieldCommentP)
+    c <- wsP classP
+    ms <- many (wsP (constructorMethodP <|> classMethodP <|> fieldCommentP))
     res <- wsP (P.string "}")
     return (c : ms)
 
@@ -275,16 +284,15 @@ classAndMethodP =
 interfaceAndMethodP :: Parse [JavaDocComment]
 interfaceAndMethodP =
   do
-    c <- interfaceP
-    ms <- many (interfaceMethodP <|> fieldCommentP)
+    c <- wsP interfaceP
+    ms <- many (wsP (constructorMethodP <|> interfaceMethodP <|> fieldCommentP))
     res <- wsP (P.string "}")
     return (c : ms)
 
 test_interfaceAndMethodP :: Test
 test_interfaceAndMethodP =
   TestList
-    [ 
-      P.parse interfaceAndMethodP "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}" ~?= Right [Interface (JavaDocHeader (Description "") []) (Name "Test"),Field (Description "Hi") (Name "foo")]
+    [ P.parse interfaceAndMethodP "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}" ~?= Right [Interface (JavaDocHeader (Description "") []) (Name "Test"), Field (Description "Hi") (Name "foo")]
     ]
 
 -- Enum Parsers
@@ -307,19 +315,54 @@ test_enumP =
 
 -- JavaDoc Parsers
 javaDocCommentP :: Parse [JavaDocComment]
-javaDocCommentP = wsP (classAndMethodP <|> interfaceAndMethodP <|> commentToSingleton enumP) where
-  commentToSingleton p = do
-  c <- p
-  return [c]
+javaDocCommentP = wsP (classAndMethodP <|> interfaceAndMethodP <|> commentToSingleton enumP)
+  where
+    commentToSingleton p = do
+      c <- p
+      return [c]
+
+classP2 :: Parse JavaDocComment
+classP2 = Class <$> header <*> name <* wsP (P.string "{")
+  where
+    -- comment is any string that is not a tagP
+    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+    name =
+      -- skips over any characters not in 'class' string until arriving at class
+      Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (P.string "class") *> wsP (many (P.satisfy Char.isAlphaNum)))
+
+-- packageP :: Parse [JavaDocComment]
+-- package org.cis1200; or import org.cis1200.*;
+
+-- >>> P.parse (packageP) "package org.cis1200;\n import org.cis1200.*;"
+-- Right "org.cis1200;"
+
+-- >>> P.parse (packageP) "package a b c;\n import"
+-- Right "package"
+
+packageP :: Parse [Char]
+packageP = wsP (stringsP ["package", "import"]) <* wsP (many (P.satisfy (== '\n')))
+
+-- * > wsP (many (P.satisfy (/= '\n')))
+
+{-
+test_nlP :: Test
+test_nlP =
+  TestList
+    [ P.parse (nlP P.alpha) "a" ~?= Right 'a',
+      P.parse (many (nlP P.alpha)) "ab \n   \t c" ~?= Right "ab"
+    ]
+
+-}
 
 javaDocCommentsP :: Parse [JavaDocComment]
 javaDocCommentsP = do
+  packages <- many packageP -- TODO: make packageP
   res <- many javaDocCommentP
   return (concat res)
   where
-  commentToSingleton p = do
-  c <- p
-  return [c]
+    commentToSingleton p = do
+      c <- p
+      return [c]
 
 test_javaDocCommentP :: Test
 test_javaDocCommentP =
@@ -332,8 +375,7 @@ javaDocP = JavaDoc <$> javaDocCommentsP
 test_javaDocP :: Test
 test_javaDocP =
   TestList
-    [ 
-      P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n * @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
+    [ P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
     ]
 
 instance Arbitrary String where
@@ -389,7 +431,6 @@ prop_roundtrip jd =
    in case parsedJavaDoc of
         Left err -> error "unable to parse"
         Right pJD -> jd == pJD
-
 
 -- Read in a file example/Foo.java as a string and run javaDocP on the string
 -- >>> main

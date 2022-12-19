@@ -1,68 +1,93 @@
+import java.util.*;
+
 /**
- * This is the class where everything you've worked on thus far comes together!
- * You can see that we've provided a path to a CSV file full of tweets and the
- * column from which they can be extracted. When run as an application, this
- * program builds a Markov Chain from the training data in the CSV file,
- * generates 10 random tweets, and prints them to the terminal.
+ * FileLineIterator provides a useful wrapper around Java's provided
+ * BufferedReader and provides practice with implementing an Iterator. Your
+ * solution should not read the entire file into memory at once, instead reading
+ * a line whenever the next() method is called.
  * <p>
- * This class also provides the writeTweetsToFile method, which can be used to
- * create a file containing randomly generated tweets.
- * <p>
- * Note: All IOExceptions thrown by writers should be caught and handled
- * properly.
+ * Note: Any IOExceptions thrown by readers should be caught and handled
+ * properly. Do not use the ready() method from BufferedReader.
  */
-public class TwitterBot {
+public class FileLineIterator {
     /**
-     * This is a path to the CSV file containing the tweets. The main method
-     * below uses the tweets in this file when calling Twitterbot. If you want
-     * to run the Twitterbot on the other files we provide, change this path to
-     * a different file. (You may need to adjust the TWEET_COLUMN too.)
-     */
-    static final String PATH_TO_TWEETS = "files/dog_feelings_tweets.csv";
-    /** Column in the PATH_TO_TWEETS CSV file to read tweets from */
-    static final int TWEET_COLUMN = 2;
-    /** File to store generated tweets */
-    static final String PATH_TO_OUTPUT_TWEETS = "files/generated_tweets.txt";
-
-    /** The MarkovChain you'll be using to generate tweets */
-    MarkovChain mc;
-    /** RandomNumber generator to pick random numbers */
-    NumberGenerator ng;
-
-    /**
-     * Given a column and a buffered reader, initializes the TwitterBot by
-     * training the MarkovChain with sentences sourced from the reader. Uses
-     * the RandomNumberGenerator().
+     * Creates a FileLineIterator for the reader. Fill out the constructor so
+     * that a user can instantiate a FileLineIterator. Feel free to create and
+     * instantiate any variables that your implementation requires here. See
+     * recitation and lecture notes for guidance.
+     * <p>
+     * If an IOException is thrown by the BufferedReader, then hasNext should
+     * return false.
+     * <p>
+     * The only method that should be called on BufferedReader is readLine() and
+     * close(). You cannot call any other methods.
      *
-     * @param br          - a buffered reader containing tweet data
-     * @param tweetColumn - the column in the reader where the text of the tweet
-     *                    itself is stored
+     * @param reader - A reader to be turned to an Iterator
+     * @throws IllegalArgumentException if reader is null
      */
-    public TwitterBot(BufferedReader br, int tweetColumn) {
-        this(br, tweetColumn, new RandomNumberGenerator());
+    public FileLineIterator(BufferedReader reader) {
     }
 
     /**
-     * Given a column and a buffered reader, initializes the TwitterBot by
-     * training the MarkovChain with all the sentences obtained as training data
-     * from the buffered reader.
-     *
-     * @param br          - a buffered reader containing tweet data
-     * @param tweetColumn - the column in the buffered reader where the text
-     *                    of the tweet itself is stored
-     * @param ng          - A NumberGenerator for the ng field, also to be
-     *                    passed to MarkovChain
+     * Creates a FileLineIterator from a provided filePath by creating a
+     * FileReader and BufferedReader for the file.
+     * <p>
+     * DO NOT MODIFY THIS METHOD.
+     * 
+     * @param filePath - a string representing the file
+     * @throws IllegalArgumentException if filePath is null or if the file
+     *                                  doesn't exist
      */
-    public TwitterBot(BufferedReader br, int tweetColumn, NumberGenerator ng) {
-        mc = new MarkovChain(ng);
-        this.ng = ng;
-        /* SOLN */
-        List<List<String>> sentences = TweetParser.csvDataToTrainingData(
-                br, tweetColumn
-        );
-        for (List<String> s : sentences) {
-            mc.train(s.iterator());
-        }
-        /* // Complete this method. */
+    public FileLineIterator(String filePath) {
+        this(fileToReader(filePath));
+    }
+
+    /**
+     * Takes in a filename and creates a BufferedReader.
+     * See Java's documentation for BufferedReader to learn how to construct one
+     * given a path to a file.
+     *
+     * @param filePath - the path to the CSV file to be turned to a
+     *                 BufferedReader
+     * @return a BufferedReader of the provided file contents
+     * @throws IllegalArgumentException if filePath is null or if the file
+     *                                  doesn't exist
+     */
+    public BufferedReader fileToReader(String filePath) {
+        return null; // Complete this method.
+
+    }
+
+    /**
+     * Returns true if there are lines left to read in the file, and false
+     * otherwise.
+     * <p>
+     * If there are no more lines left, this method should close the
+     * BufferedReader.
+     *
+     * @return a boolean indicating whether the FileLineIterator can produce
+     *         another line from the file
+     */
+    public static boolean hasNext() {
+        return false; // Complete this method.
+    }
+
+    /**
+     * Returns the next line from the file, or throws a NoSuchElementException
+     * if there are no more strings left to return (i.e. hasNext() is false).
+     * <p>
+     * This method also advances the iterator in preparation for another
+     * invocation. If an IOException is thrown during a next() call, your
+     * iterator should make note of this such that future calls of hasNext()
+     * will return false and future calls of next() will throw a
+     * NoSuchElementException
+     *
+     * @return the next line in the file
+     * @throws java.util.NoSuchElementException if there is no more data in the
+     *                                          file
+     */
+    public String next() {
+        return null; // Complete this method.
+
     }
 }

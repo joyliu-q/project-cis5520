@@ -58,7 +58,7 @@ main = do
   line <- getLine
   case line of
     "help" -> do
-      putStr "Type a relative path to the directory to generate documentation for or type q to exit \n"
+      putStr "Type a relative path to the directory to generate documentation for this program or type q to exit \n"
       main
     "q" -> return ()
     _ -> do
