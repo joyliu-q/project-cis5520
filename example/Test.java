@@ -1,20 +1,31 @@
-/** 
- * Enum Bar is an enum that does x and y.
+/**
+ * This is the class where everything you've worked on thus far comes together!
+ * You can see that we've provided a path to a CSV file full of tweets and the
+ * column from which they can be extracted. When run as an application, this
+ * program builds a Markov Chain from the training data in the CSV file,
+ * generates 10 random tweets, and prints them to the terminal.
+ * <p>
+ * This class also provides the writeTweetsToFile method, which can be used to
+ * create a file containing randomly generated tweets.
+ * <p>
+ * Note: All IOExceptions thrown by writers should be caught and handled
+ * properly.
  */
-enum Bar {
-}
-
-public class Test {
-  /**
-   * This is a description of the method.
-   * 
-   * @param incomingDamage incoming damage of the attack
-   * @param damageType     type of damage being done
-   * @version 1.05
-   * @return how much damage actually landed
-   * @throws IllegalArgumentException incoming damage is negative
-   */
-  public int successfullyAttacked(int incomingDamage, String damageType) throws IllegalArgumentException {
-    return 0;
-  }
+public class TwitterBot {
+    /** 
+     * The MarkovChain you'll be using to generate tweets 
+     */
+    MarkovChain mc;
+    /**
+     * Given a column and a buffered reader, initializes the TwitterBot by
+     * training the MarkovChain with sentences sourced from the reader. Uses
+     * the RandomNumberGenerator().
+     *
+     * @param br          - a buffered reader containing tweet data
+     * @param tweetColumn - the column in the reader where the text of the tweet
+     *                    itself is stored
+     */
+    public TwitterBot(BufferedReader br, int tweetColumn) {
+        this(br, tweetColumn, new RandomNumberGenerator());
+    }
 }
