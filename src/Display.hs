@@ -25,8 +25,8 @@ generateMarkdownObj (JavaDoc xs) = Markdown $ foldr (\x acc -> docCommentToEleme
       Interface header (Name name) -> H1 (Text $ "Interface - " ++ name) : headerToMarkdown header
       Enum (Description "") (Name name) -> [H1 (Text $ "Enum - " ++ name)]
       Enum (Description desc) (Name name) -> [H1 (Text $ "Enum - " ++ name), H2 (Text "Description"), PlainText (Text desc)]
-      Field (Description "") (Name name) -> [H1 (Text $ "Field - " ++ name)]
-      Field (Description desc) (Name name) -> [H1 (Text $ "Field - " ++ name), H2 (Text "Description"), PlainText (Text desc)]
+      Field (Description "") (Name name) -> []
+      Field (Description desc) (Name name) -> []
     headerToMarkdown :: JavaDocHeader -> [Element]
     headerToMarkdown (JavaDocHeader (Description "") tagList) = tagListToMarkdown tagList
     headerToMarkdown (JavaDocHeader (Description desc) tagList) = H2 (Text "Description") : PlainText (Text desc) : tagListToMarkdown tagList
