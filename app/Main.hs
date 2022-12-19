@@ -48,11 +48,6 @@ generateAllDocFiles (x : xs) basePath = do
   generateAllDocFiles xs basePath
 generateAllDocFiles _ _ = return ()
 
--- main :: IO ()
--- main = do
---   recursiveFiles <- getFilesRecursive "./example/TestProject"
---   generateAllDocFiles recursiveFiles
-
 main = do
   putStr "> "
   line <- getLine

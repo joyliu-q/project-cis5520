@@ -1,4 +1,10 @@
-module Display where
+module Display
+  ( Element (..),
+    Markdown (..),
+    generateMarkdownObj,
+    generateMarkdownText,
+  )
+where
 
 import Syntax (Description (..), JavaDoc (JavaDoc), JavaDocComment (..), JavaDocHeader (..), Name (..), Tag (..))
 import Test.HUnit

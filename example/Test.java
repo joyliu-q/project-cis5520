@@ -1,5 +1,3 @@
-import java.util.*;
-
 /**
  * FileLineIterator provides a useful wrapper around Java's provided
  * BufferedReader and provides practice with implementing an Iterator. Your
@@ -10,6 +8,7 @@ import java.util.*;
  * properly. Do not use the ready() method from BufferedReader.
  */
 public class FileLineIterator {
+
     /**
      * Creates a FileLineIterator for the reader. Fill out the constructor so
      * that a user can instantiate a FileLineIterator. Feel free to create and
@@ -26,6 +25,8 @@ public class FileLineIterator {
      * @throws IllegalArgumentException if reader is null
      */
     public FileLineIterator(BufferedReader reader) {
+        // Complete this constructor.
+
     }
 
     /**
@@ -53,7 +54,7 @@ public class FileLineIterator {
      * @throws IllegalArgumentException if filePath is null or if the file
      *                                  doesn't exist
      */
-    public BufferedReader fileToReader(String filePath) {
+    public static BufferedReader fileToReader(String filePath) {
         return null; // Complete this method.
 
     }
@@ -68,7 +69,7 @@ public class FileLineIterator {
      * @return a boolean indicating whether the FileLineIterator can produce
      *         another line from the file
      */
-    public static boolean hasNext() {
+    public boolean hasNext() {
         return false; // Complete this method.
     }
 

@@ -1,4 +1,12 @@
-import Display (Element (..), Markdown (..), Text (..), generateMarkdownObj, generateMarkdownText)
+module DisplayTest where
+
+import Display
+  ( Element (..),
+    Markdown (Markdown),
+    Text (..),
+    generateMarkdownObj,
+    generateMarkdownText,
+  )
 import Syntax (Description (..), JavaDoc (..), JavaDocComment (..), JavaDocHeader (..), Name (Name), Tag (..))
 import Test.HUnit
 
@@ -22,13 +30,13 @@ testConvertMethod :: Test
 testConvertMethod =
   TestList
     [ generateMarkdownObj (JavaDoc [Method (JavaDocHeader (Description "This is the run method.") []) (Name "run")])
-        ~?= Markdown [H1 (Text "Method - run\n"), H2 (Text "Description"), PlainText (Text "This is the run method.")],
+        ~?= Markdown [H1 (Text "Method - run"), H2 (Text "Description"), PlainText (Text "This is the run method.")],
       generateMarkdownObj (JavaDoc [Method (JavaDocHeader (Description "") []) (Name "run2")])
-        ~?= Markdown [H1 (Text "Method - run2\n")],
+        ~?= Markdown [H1 (Text "Method - run2")],
       generateMarkdownObj (JavaDoc [Method (JavaDocHeader (Description "This is the run method.") [Deprecated (Description "Support for this was removed.")]) (Name "run3")])
-        ~?= Markdown [H1 (Text "Method - run3\n"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")],
+        ~?= Markdown [H1 (Text "Method - run3"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")],
       generateMarkdownObj (JavaDoc [Method (JavaDocHeader (Description "This is the run method.") [Param (Name "param1") (Description "param1 description"), Param (Name "param2") (Description "param2 description"), Return (Description "return value description"), Deprecated (Description "Support for this was removed.")]) (Name "run4")])
-        ~?= Markdown [H1 (Text "Method - run4\n"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Parameter - param1"), PlainText (Text "param1 description"), H2 (Text "Parameter - param2"), PlainText (Text "param2 description"), H2 (Text "Return"), PlainText (Text "return value description"), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")]
+        ~?= Markdown [H1 (Text "Method - run4"), H2 (Text "Description"), PlainText (Text "This is the run method."), H2 (Text "Parameter - param1"), PlainText (Text "param1 description"), H2 (Text "Parameter - param2"), PlainText (Text "param2 description"), H2 (Text "Return"), PlainText (Text "return value description"), H2 (Text "Deprecated"), PlainText (Text "Support for this was removed.")]
     ]
 
 -- >>> runTestTT testConvertMethod

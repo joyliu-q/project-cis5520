@@ -1,8 +1,3 @@
-package org.cis1200;
-
-import java.util.Iterator;
-import java.io.BufferedReader;
-
 /**
  * FileLineIterator provides a useful wrapper around Java's provided
  * BufferedReader and provides practice with implementing an Iterator. Your
@@ -12,9 +7,7 @@ import java.io.BufferedReader;
  * Note: Any IOExceptions thrown by readers should be caught and handled
  * properly. Do not use the ready() method from BufferedReader.
  */
-public class FileLineIterator implements Iterator<String> {
-
-    // Add the fields needed to implement your FileLineIterator
+public class FileLineIterator {
 
     /**
      * Creates a FileLineIterator for the reader. Fill out the constructor so

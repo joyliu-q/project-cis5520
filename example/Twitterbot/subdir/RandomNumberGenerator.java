@@ -1,13 +1,11 @@
-package org.cis1200;
+package twitterbot.subdir;
 
 import java.util.Random;
 
 /**
  * Produces random numbers using Java's Random class
  */
-public class RandomNumberGenerator implements NumberGenerator {
-
-    private Random r;
+public class RandomNumberGenerator {
 
     /**
      * Generates pseudo-random numbers.

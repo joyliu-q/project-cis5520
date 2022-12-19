@@ -7,15 +7,7 @@ import java.util.NoSuchElementException;
 /**
  * Produces a deterministic sequence of numbers
  */
-public class ListNumberGenerator implements NumberGenerator {
-
-    // INVARIANT: numbers is nonnull and nonempty
-    private final int[] numbers;
-    // INVARIANT: smallest is the minimum value of numbers
-    private int smallest;
-    // INVARIANT: index is a valid position in numbers
-    private int index = 0;
-
+public class ListNumberGenerator {
     /**
      * Initialize the field {@code smallest} by finding the minimum
      * value of the array. Establishes its invariant.
@@ -42,8 +34,7 @@ public class ListNumberGenerator implements NumberGenerator {
     public ListNumberGenerator(List<Integer> list) {
         if (list == null || list.isEmpty()) {
             throw new IllegalArgumentException(
-                    "list must be non-null and non-empty"
-            );
+                    "list must be non-null and non-empty");
         }
         this.numbers = new int[list.size()];
         int i = 0;
@@ -103,8 +94,7 @@ public class ListNumberGenerator implements NumberGenerator {
         if (bound <= smallest) {
             throw new NoSuchElementException(
                     "The list contains no elements "
-                            + "greater than or equal to the argued bound"
-            );
+                            + "greater than or equal to the argued bound");
         }
         int nextInt = next();
         while (nextInt >= bound) {

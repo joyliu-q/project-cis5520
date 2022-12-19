@@ -1,4 +1,4 @@
-package org.cis1200;
+package subdir;
 
 /**
  * This simple interface produces numbers.

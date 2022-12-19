@@ -1,7 +1,10 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {-# HLINT ignore "Use $>" #-}
-module DocParse where
+module DocParse
+  ( generateJavaDocText,
+  )
+where
 
 import Control.Applicative
 import Data.Char qualified as Char
@@ -11,6 +14,13 @@ import Display
 import Parse (Parse)
 import Parse qualified as P
 import Syntax
+  ( Description (..),
+    JavaDoc (..),
+    JavaDocComment (..),
+    JavaDocHeader (JavaDocHeader),
+    Name (..),
+    Tag (..),
+  )
 import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck
 import Test.QuickCheck qualified as QC
@@ -76,14 +86,15 @@ anyChar = P.satisfy (const True)
 -- Parser for the string that comes directly after an @tag
 -- Given a string "tag", returns a parser for the string that comes directly after the @tag
 desP :: Parse String
-desP = wsP (many (P.satisfy (/= '@'))) >>=
-  \s ->
-    let trimEnd = dropWhileEnd Char.isSpace s -- "This is a description\n *\n* " -> "This is a description\n *\n*"
-        trimStart = dropWhile Char.isSpace trimEnd -- "This is a description\n *\n*"
-      in pure trimStart
+desP =
+  wsP (many (P.satisfy (/= '@')))
+    >>= \s ->
+      let trimEnd = dropWhileEnd Char.isSpace s -- "This is a description\n *\n* " -> "This is a description\n *\n*"
+          trimStart = dropWhile Char.isSpace trimEnd -- "This is a description\n *\n*"
+       in pure trimStart
 
 descriptionTagP :: String -> Parse Description
-descriptionTagP tag = Description <$> (wsP (P.string tagString) *> desP) 
+descriptionTagP tag = Description <$> (wsP (P.string tagString) *> desP)
   where
     tagString = "@" ++ tag
 
@@ -91,7 +102,7 @@ descriptionTagP tag = Description <$> (wsP (P.string tagString) *> desP)
 nameDescriptionTagP :: String -> (Parse Name, Parse Description)
 nameDescriptionTagP tag = do
   let tagString = "@" ++ tag
-  let name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy Char.isAlphaNum)))
+  let name = Name <$> (wsP (P.string tagString) *> wsP (many (P.satisfy (/= ' '))))
   let description = Description <$> desP
   (name, description)
 
@@ -212,49 +223,49 @@ test_classP =
 -- | Parse an interface method's signature
 interfaceMethodP :: Parse JavaDocComment
 interfaceMethodP = do
-      header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-      ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
-      static <- wsP (stringsP ["static"])
-      methodType <- wsP (many (P.satisfy Char.isAlphaNum))
-      name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum)) 
-      args <- wsP paren
-      additionalBody <- many (P.satisfy (/= ';'))
-      semi <- wsP (P.string ";")
-      -- require methodType exists, name exists, and headers exist
-      if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
-        then error "Invalid interface method"
-        else pure (Method header name)
+  header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+  ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
+  static <- wsP (stringsP ["static"])
+  methodType <- wsP (many (P.satisfy Char.isAlphaNum))
+  name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
+  args <- wsP paren
+  additionalBody <- many (P.satisfy (/= ';'))
+  semi <- wsP (P.string ";")
+  -- require methodType exists, name exists, and headers exist
+  if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
+    then error "Invalid interface method"
+    else pure (Method header name)
 
 -- | Parse a class method's signature
 classMethodP :: Parse JavaDocComment
 classMethodP = do
-      header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-      ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
-      static <- wsP (stringsP ["static"])
-      methodType <- wsP (many (P.satisfy Char.isAlphaNum))
-      name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
-      args <- wsP paren
-      implements <- wsP (many (P.satisfy (/= '{')))
-      implementation <- braces
-      -- require methodType exists, name exists, and headers exist
-      if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
-        then error "Invalid class method"
-        else pure (Method header name)
+  header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+  ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
+  static <- wsP (stringsP ["static"])
+  methodType <- wsP (many (P.satisfy Char.isAlphaNum))
+  name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
+  args <- wsP paren
+  implements <- wsP (many (P.satisfy (/= '{')))
+  implementation <- braces
+  -- require methodType exists, name exists, and headers exist
+  if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
+    then error "Invalid class method"
+    else pure (Method header name)
 
 -- | Parse a constructor method
 constructorMethodP :: Parse JavaDocComment
 constructorMethodP = do
-      header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-      ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
-      static <- wsP (stringsP ["static"])
-      name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
-      args <- wsP paren
-      implements <- wsP (many (P.satisfy (/= '{')))
-      implementation <- braces
-      -- require name exists, and headers exist
-      if name == Name "" || header == JavaDocHeader (Description "") []
-        then error "Invalid constructor method"
-        else pure (Method header name)
+  header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+  ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
+  static <- wsP (stringsP ["static"])
+  name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
+  args <- wsP paren
+  implements <- wsP (many (P.satisfy (/= '{')))
+  implementation <- braces
+  -- require name exists, and headers exist
+  if name == Name "" || header == JavaDocHeader (Description "") []
+    then error "Invalid constructor method"
+    else pure (Method header name)
 
 -- | Parse a generic / unknown type of method
 methodP :: Parse JavaDocComment
@@ -364,21 +375,22 @@ classP2 = Class <$> header <*> name <* wsP (P.string "{")
 -- package org.cis1200; or import org.cis1200.*;
 
 packageP :: Parse String
-packageP = wsP (stringsP ["package", "import"]) *> wsP (many (P.satisfy (/= ';'))) <* wsP (P.string ";")
+packageP = wsP (P.string "package" <|> P.string "import") *> wsP (many (P.satisfy (/= '\n')))
 
 test_packageP :: Test
 test_packageP =
   TestList
-    [ P.parse packageP "package org.cis1200;" ~?= Right "org.cis1200",
-      P.parse packageP "import org.cis1200.*;" ~?= Right "org.cis1200.*"
+    [ P.parse packageP "package org.cis1200;" ~?= Right "org.cis1200;",
+      P.parse packageP "import org.cis1200.*;" ~?= Right "org.cis1200.*;"
     ]
 
 -- JavaDoc parsers
 javaDocP :: Parse JavaDoc
-javaDocP = JavaDoc <$> do
-  packages <- many packageP
-  res <- many javaDocCommentP
-  return (concat res)
+javaDocP =
+  JavaDoc <$> do
+    packages <- many packageP
+    res <- many javaDocCommentP
+    return (concat res)
   where
     commentToSingleton p = do
       c <- p
@@ -387,7 +399,8 @@ javaDocP = JavaDoc <$> do
 test_javaDocP :: Test
 test_javaDocP =
   TestList
-    [ P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
+    [ P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")]),
+      P.parse javaDocP "import java.util.*;\npublic class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
     ]
 
 instance Arbitrary String where
@@ -432,6 +445,7 @@ generateJavaDocCommentText jdc = case jdc of
   Field (Description d) (Name n) ->
     "/**\n" ++ " * " ++ d ++ "\n" ++ "*/\n" ++ "public String " ++ n ++ ";\n"
 
+-- | Generate string version of JavaDoc from its object representation
 generateJavaDocText :: JavaDoc -> String
 generateJavaDocText (JavaDoc jdc) = case jdc of
   [] -> ""

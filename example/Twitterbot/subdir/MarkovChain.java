@@ -1,6 +1,8 @@
-package org.cis1200;
+package subdir;
 
 import java.util.*;
+import Twitterbot.subdir.ProbabilityDistribution;
+import Twitterbot.subdir.RandomNumberGenerator;
 
 /**
  * A Markov Chain is a data structure that tracks the frequency with which one
@@ -9,78 +11,8 @@ import java.util.*;
  * can use the MarkovChain to generate "plausible" tweets by conducting a random
  * walk through the chain according to the frequencies. Please see the homework
  * instructions for more information on Markov Chains.
- * <p>
- * TRAINING:
- * <p>
- * An example: Suppose we train the MarkovChain on these two Strings that
- * represent tweets: "a table" and "A banana? A banana!"
- * <p>
- * We first "clean up" the tweets and parse them into individual sentences to
- * use as training data. This process removes punctuation and puts all words
- * into lower case, yielding these three sentences (written using OCaml list
- * notation):
- * <p>
- * {@code [ ["a"; "table"]; ["a"; "banana"]; ["a"; "banana"] ] }
- * <p>
- * The MarkovChain that results from this training data maps each observed
- * string to a ProbabilityDistribution that is based on the recorded occurrences
- * of bigrams (adjacent words) in the data:
- * <p>
- * - "a" maps to "table":1, "banana":2
- * <p>
- * - "table" maps to {@code "<END>"}:1
- * <p>
- * - "banana" maps to {@code "<END>"}:2
- * <p>
- * "a" is followed by "table" one time and "banana" twice, "table" is the end
- * of a sentence once, and "banana" is the end of a sentence twice. NOTE: we
- * use the string {@code "<END>"} to mark the end of a sentence. Because we
- * remove all punctuation first, this string is not a valid word.
- * <p>
- * The MarkovChain also records a ProbabilityDistribution that contains the
- * frequencies with which words start any sentence. In this case, that
- * startWords data will just say that "a" started 3 sentences.
- * <p>
- * GENERATING A TWEET:
- * <p>
- * Once we have trained the Markov model, we can use it to generate a tweet.
- * Given a desired length of tweet (in characters), we repeatedly generate
- * sentences until the tweet is long enough.
- * <p>
- * To generate a sentence, we treat the MarkovChain as an iterator that
- * maintains state about the current word (i.e. the one that will be generated
- * by next()).
- * <p>
- * - the reset() method picks (at random) one of the startWords to be the
- * current word. We use reset() to start a new sentence.
- * <p>
- * - the next() method picks (at random) a successor of the current word
- * according to the current word's probability distribution. That successor will
- * be the new "current" word after the current one is returned by next().
- * <p>
- * In the example above, {@code reset()} sets the current word to "a" (the only
- * choice
- * offered by startWord). Then: next(); // yields "a" (the start word) with
- * probability 3/3 next(); // yields "table" with probability 1/3 and "banana"
- * with probability "2/3" then the iterator is finished (the current word will
- * be {@code "<END>"}), since both "table" and "banana" appeared only at the end
- * of
- * sentences.
- * <p>
- * The random choices are determined by a NumberGenerator.
  */
-public class MarkovChain implements Iterator<String> {
-    /** source of random numbers */
-    private NumberGenerator ng;
-    /** probability distribution of initial words in a sentence */
-    final ProbabilityDistribution<String> startWords;
-    /** for each word, probability distribution of next word in a sentence */
-    final Map<String, ProbabilityDistribution<String>> chain;
-    /** end of sentence marker */
-    static final String END_TOKEN = "<END>";
-
-    // add field(s) used in implementing the Iterator functionality
-
+public class MarkovChain {
     /**
      * No need to write any constructors. They are provided for you.
      */
@@ -97,8 +29,7 @@ public class MarkovChain implements Iterator<String> {
     public MarkovChain(NumberGenerator ng) {
         if (ng == null) {
             throw new IllegalArgumentException(
-                    "NumberGenerator input cannot be null"
-            );
+                    "NumberGenerator input cannot be null");
         }
         this.chain = new TreeMap<>();
         this.ng = ng;
@@ -117,7 +48,6 @@ public class MarkovChain implements Iterator<String> {
      */
     void addBigram(String first, String second) {
         // Complete this method.
-
     }
 
     /**
@@ -217,7 +147,6 @@ public class MarkovChain implements Iterator<String> {
      *         (i.e. it is a meaningful part of the sentence - see {@link #train})
      *         and false otherwise
      */
-    @Override
     public boolean hasNext() {
         return false; // Complete this method.
     }
@@ -234,7 +163,6 @@ public class MarkovChain implements Iterator<String> {
      * @throws NoSuchElementException if there are no more words on the walk
      *                                through the chain.
      */
-    @Override
     public String next() {
         return null; // Complete this method.
     }
@@ -275,8 +203,7 @@ public class MarkovChain implements Iterator<String> {
         if (startWords.count(curWord) < 1) {
             throw new IllegalArgumentException(
                     "first word " + curWord + " " +
-                            "not present in " + "startWords"
-            );
+                            "not present in " + "startWords");
         }
 
         List<Integer> probabilityNumbers = new LinkedList<>();
@@ -298,8 +225,7 @@ public class MarkovChain implements Iterator<String> {
                 if (curDistribution.count(nextWord) < 1) {
                     throw new IllegalArgumentException(
                             "word " + nextWord +
-                                    " not found as a child of" + " word " + curWord
-                    );
+                                    " not found as a child of" + " word " + curWord);
                 }
                 probabilityNumbers.add(curDistribution.index(nextWord));
             } else {
@@ -315,7 +241,6 @@ public class MarkovChain implements Iterator<String> {
      * Use this method to print out markov chains with words and probability
      * distributions.
      */
-    @Override
     public String toString() {
         StringBuilder res = new StringBuilder();
         for (Map.Entry<String, ProbabilityDistribution<String>> c : chain.entrySet()) {
