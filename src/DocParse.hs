@@ -15,16 +15,15 @@ import Test.HUnit (Assertion, Counts, Test (..), assert, runTestTT, (~:), (~?=))
 import Test.QuickCheck
 import Test.QuickCheck qualified as QC
 
--- Helper functions
+-- | Parse out whitespace
 wsP :: Parse a -> Parse a
 wsP p = p <* many (P.satisfy Char.isSpace)
 
+-- | Parse out a line between newline characters
 nlP :: Parse a -> Parse a
 nlP p = many (P.satisfy (== '\n')) *> p <* many (P.satisfy (== '\n'))
 
--- >>> P.parse (braces2 *> (many anyChar)) "void func() { if (true) { while(true) {}; } else { that } return other;} blah"
--- Right " blah"
-
+-- | compute return resultant string after function body
 parenMatcher :: String -> Int -> String
 parenMatcher str cnt = case str of
   ('{' : xs) -> parenMatcher xs (cnt + 1)
@@ -32,9 +31,11 @@ parenMatcher str cnt = case str of
   (x : xs) -> parenMatcher xs cnt
   [] -> ""
 
+-- | Parse until outermost braces are completed
 braces :: Parse String
 braces = P.P $ \x -> Just ("", parenMatcher x 0)
 
+-- | Parse until parenthesis are matched
 paren :: Parse String
 paren = wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")")
 
@@ -58,6 +59,7 @@ test_nlP =
 -- >>> P.parse (wsP (stringsP ["static", "final"]) *> (wsP (many (P.satisfy (/= ' '))) *> (wsP (many (P.satisfy (/= ' '))) <* wsP (many (P.satisfy (/= ';')))))) "static final int a = 1;"
 -- Right "int"
 
+-- | Parse for multiple possible strings
 stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
   [] -> pure []
@@ -114,8 +116,7 @@ test_tagP =
       P.parse tagP "@param x the x value\n" ~?= Right (Param (Name "x") (Description "the x value"))
     ]
 
--- Comment Parsers
--- Extract inner values of a comment. Comment can either by enclosed by /* */ (multiline) or // (single line)
+-- | Extract inner values of a comment. Comment can either by enclosed by /* */ (multiline) or // (single line)
 oneLineCommentP :: Parse a -> Parse a
 oneLineCommentP p =
   (wsP (P.string "//") *> many (P.satisfy (/= '\n')))
@@ -125,6 +126,7 @@ oneLineCommentP p =
         let (x, _) = x0
         pure x
 
+-- | Split string on specified delimeter
 splitOn :: String -> Char -> [String]
 splitOn s c = case dropWhile (== c) s of
   "" -> []
@@ -133,8 +135,7 @@ splitOn s c = case dropWhile (== c) s of
     let (w, s'') = break (== c) s'
      in w : splitOn s'' c
 
--- >>> processCommentLine  " *\n *"
--- ""
+-- | Process a single comment line
 processCommentLine :: String -> String
 processCommentLine s =
   let sList = splitOn s '\n'
@@ -148,11 +149,7 @@ processCommentLine s =
                in trimStart' ++ process tl --
        in process sList
 
--- >>> P.parse (wsP (P.string "/**") *> wsP P.endCommentP) "/**\n* Description\n *\n *\n * first\n *\n */"
--- Right "* Description\n *\n *\n * first\n *\n "
-
--- >>> P.parse (multiLineCommentP2 (many anyChar)) "/**\n* Description\n *\n *\n * first\n *\n */"
--- Right "Description\n\n\nfirst\n\n\n"
+-- | Process a multiline comment
 multiLineCommentP :: Parse a -> Parse a
 multiLineCommentP p =
   wsP (P.string "/**") *> wsP P.endCommentP
@@ -165,6 +162,7 @@ multiLineCommentP p =
               pure x
             <* wsP (stringsP ["*/"])
 
+-- | Parse either a one line or multiline comment
 commentP :: Parse a -> Parse a
 commentP p =
   nlP (wsP (oneLineCommentP p <|> multiLineCommentP p))
@@ -173,6 +171,8 @@ commentP p =
 -- >>> P.parse (descriptionP) "This is a description\n *\n* @param hi hello"
 -- Right (Description "/")
 
+-- | Parse a Javadoc header description
+descriptionP :: Parse Description
 descriptionP =
   Description
     <$> ( many (P.satisfy (/= '@')) -- hello *
@@ -182,8 +182,12 @@ descriptionP =
                in pure trimStart
         )
 
+-- | Parse tags in a Javadoc header comment
+tags :: Parse [Tag]
 tags = wsP (many ((wsP (P.string "*") *> tagP) <|> tagP))
 
+-- | Parse a class's comment and method header
+classP :: Parse JavaDocComment
 classP = Class <$> header <*> name <* wsP (P.string "{")
   where
     -- comment is any string that is not a tagP
@@ -206,24 +210,28 @@ test_classP =
       P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
 
+-- | Parse an interface method's signature
 interfaceMethodP :: Parse JavaDocComment
 interfaceMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
   where
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
+-- | Parse a class method's signature
 classMethodP :: Parse JavaDocComment
 classMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
   where
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha) *> wsP (many (P.satisfy Char.isAlphaNum)))
 
+-- | Parse a constructor method
 constructorMethodP :: Parse JavaDocComment
 constructorMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
   where
     header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
     name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha))
 
+-- | Parse a generic / unknown type of method
 methodP :: Parse JavaDocComment
 methodP = wsP (interfaceMethodP <|> classMethodP <|> constructorMethodP)
 
@@ -239,6 +247,7 @@ test_methodP =
       P.parse methodP "public static void bar(){}" ~?= Right (Method (JavaDocHeader (Description "") []) (Name "bar"))
     ]
 
+-- | Parse an inteface
 interfaceP :: Parse JavaDocComment
 interfaceP = Interface <$> header <*> name <* wsP (P.string "{")
   where
@@ -295,7 +304,7 @@ test_interfaceAndMethodP =
     [ P.parse interfaceAndMethodP "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}" ~?= Right [Interface (JavaDocHeader (Description "") []) (Name "Test"), Field (Description "Hi") (Name "foo")]
     ]
 
--- Enum Parsers
+-- | Parse an enum
 enumP :: Parse JavaDocComment
 enumP = Enum <$> header <*> name <* wsP (P.string "{") <* wsP (many (P.satisfy (/= '}'))) <* wsP (P.string "}")
   where
@@ -313,7 +322,7 @@ test_enumP =
       P.parse enumP "enum Foo { \n // blah \n } \n" ~?= Right (Enum (Description "") (Name "Foo"))
     ]
 
--- JavaDoc Parsers
+-- | Parse into a list of JavaDocComment objects
 javaDocCommentP :: Parse [JavaDocComment]
 javaDocCommentP = wsP (classAndMethodP <|> interfaceAndMethodP <|> commentToSingleton enumP)
   where
@@ -356,7 +365,7 @@ test_nlP =
 
 javaDocCommentsP :: Parse [JavaDocComment]
 javaDocCommentsP = do
-  packages <- many packageP -- TODO: make packageP
+  -- packages <- many packageP -- TODO: make packageP
   res <- many javaDocCommentP
   return (concat res)
   where
@@ -391,7 +400,7 @@ instance Arbitrary String where
 
 -- Roundtrip tests: Given JavaDoc represented in Haskell syntax, translate it back into Java string representation.
 
--- Generate arbitrary JavaDocComment
+-- | Generate string version of tags from their object representation
 generateTagsText :: [Tag] -> String
 generateTagsText = concatMap generateTagText
   where
@@ -405,6 +414,8 @@ generateTagsText = concatMap generateTagText
       Throws (Name n) (Description d) -> " * @throws " ++ n ++ " " ++ d ++ "\n"
 
 -- >>> generateJavaDocCommentText (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "Foo"))
+
+-- | Create an arbitrary comment string based on JavaDocComment Object
 generateJavaDocCommentText :: JavaDocComment -> String
 generateJavaDocCommentText jdc = case jdc of
   Class (JavaDocHeader (Description d) tags) (Name n) ->
@@ -423,7 +434,7 @@ generateJavaDocText (JavaDoc jdc) = case jdc of
   [] -> ""
   (x : xs) -> generateJavaDocCommentText x ++ "\n\n" ++ generateJavaDocText (JavaDoc xs)
 
--- Quickcheck roundtrip tests
+-- | Quickcheck roundtrip tests
 prop_roundtrip :: JavaDoc -> Bool
 prop_roundtrip jd =
   let javaDocStr = generateJavaDocText jd

@@ -5,16 +5,19 @@ import Test.HUnit
 
 newtype Text = Text String deriving (Eq, Show)
 
+-- | data type representing markdown elements
 data Element
   = H1 Text
   | H2 Text
   | H3 Text
   | H4 Text
   | PlainText Text
+  | Code Text
   deriving (Eq, Show)
 
 newtype Markdown = Markdown [Element] deriving (Eq, Show)
 
+-- | convert JavaDoc type representation in a Markdown representation
 generateMarkdownObj :: JavaDoc -> Markdown
 generateMarkdownObj (JavaDoc xs) = Markdown $ foldr (\x acc -> docCommentToElements x ++ acc) [] xs
   where
@@ -36,11 +39,12 @@ generateMarkdownObj (JavaDoc xs) = Markdown $ foldr (\x acc -> docCommentToEleme
     tagToElements tag = case tag of
       Author (Description desc) -> [H2 (Text "Author"), PlainText (Text desc)]
       Deprecated (Description desc) -> [H2 (Text "Deprecated"), PlainText (Text desc)]
-      Param (Name name) (Description desc) -> [H2 (Text "Parameter"), PlainText (Text $ "`" ++ name ++ "` " ++ desc)]
+      Param (Name name) (Description desc) -> [H2 (Text "Parameter"), Code (Text name), PlainText (Text $ " " ++ desc)]
       Return (Description desc) -> [H2 (Text "Return"), PlainText (Text desc)]
       Throws (Name name) (Description desc) -> [H2 (Text ("Throws - " ++ name)), PlainText (Text desc)]
       Version (Description desc) -> [H2 (Text "Version"), PlainText (Text desc)]
 
+-- | convert Markdown representation into a Markdown string
 generateMarkdownText :: Markdown -> String
 generateMarkdownText (Markdown xs) = foldr (\x acc -> go x ++ acc) [] xs
   where
@@ -51,29 +55,4 @@ generateMarkdownText (Markdown xs) = foldr (\x acc -> go x ++ acc) [] xs
       H3 (Text text) -> "### " ++ text ++ "\n"
       H4 (Text text) -> "#### " ++ text ++ "\n"
       PlainText (Text text) -> text ++ "\n"
-
--- >>> runAllGenerateMarkdownText
--- Counts {cases = 10, tried = 10, errors = 0, failures = 0}
-
-{-
-Example:
-
-# Class ArrayList
-
-## Description
-
-desc
-
-## tag1
-
-explanation
-
-# Method Name
-
-## Desc
-
-## Tag1
-
-## Tag2
-
--}
+      Code (Text text) -> "`" ++ text ++ "`"
