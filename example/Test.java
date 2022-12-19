@@ -12,10 +12,23 @@
  * properly.
  */
 public class TwitterBot {
-    /** 
-     * The MarkovChain you'll be using to generate tweets 
+    /**
+     * This is a path to the CSV file containing the tweets. The main method
+     * below uses the tweets in this file when calling Twitterbot. If you want
+     * to run the Twitterbot on the other files we provide, change this path to
+     * a different file. (You may need to adjust the TWEET_COLUMN too.)
      */
+    static final String PATH_TO_TWEETS = "files/dog_feelings_tweets.csv";
+    /** Column in the PATH_TO_TWEETS CSV file to read tweets from */
+    static final int TWEET_COLUMN = 2;
+    /** File to store generated tweets */
+    static final String PATH_TO_OUTPUT_TWEETS = "files/generated_tweets.txt";
+
+    /** The MarkovChain you'll be using to generate tweets */
     MarkovChain mc;
+    /** RandomNumber generator to pick random numbers */
+    NumberGenerator ng;
+
     /**
      * Given a column and a buffered reader, initializes the TwitterBot by
      * training the MarkovChain with sentences sourced from the reader. Uses
@@ -27,5 +40,29 @@ public class TwitterBot {
      */
     public TwitterBot(BufferedReader br, int tweetColumn) {
         this(br, tweetColumn, new RandomNumberGenerator());
+    }
+
+    /**
+     * Given a column and a buffered reader, initializes the TwitterBot by
+     * training the MarkovChain with all the sentences obtained as training data
+     * from the buffered reader.
+     *
+     * @param br          - a buffered reader containing tweet data
+     * @param tweetColumn - the column in the buffered reader where the text
+     *                    of the tweet itself is stored
+     * @param ng          - A NumberGenerator for the ng field, also to be
+     *                    passed to MarkovChain
+     */
+    public TwitterBot(BufferedReader br, int tweetColumn, NumberGenerator ng) {
+        mc = new MarkovChain(ng);
+        this.ng = ng;
+        /* SOLN */
+        List<List<String>> sentences = TweetParser.csvDataToTrainingData(
+                br, tweetColumn
+        );
+        for (List<String> s : sentences) {
+            mc.train(s.iterator());
+        }
+        /* // Complete this method. */
     }
 }
