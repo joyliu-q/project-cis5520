@@ -22,6 +22,9 @@ nlP :: Parse a -> Parse a
 nlP p = many (P.satisfy (== '\n')) *> p <* many (P.satisfy (== '\n'))
 
 -- TODO: not my proudest work
+-- >>> P.parse braces "{{a}}"
+-- Right ""
+
 braces :: Parse String
 braces = wsP (P.string "{") *> many anyChar >>= -- give remaining string, keep track of how many braces
   \s -> do
@@ -199,7 +202,7 @@ test_classP =
       P.parse classP "class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "") []) (Name "Foo")),
       P.parse classP "/**\n* The Foo class\n*/\nclass Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") []) (Name "Foo")),
       P.parse classP "/**\n* The Foo class\n* @version 1.0\n */ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "Foo")),
-      P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
+      P.parse classP "/**\n* The Foo class\n* @version 1.0\n* @param x the x value\n*/ \n class Foo { \n // blah \n } \n" ~?= Right (Class (JavaDocHeader (Description "The Foo class") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
 
 
@@ -329,7 +332,8 @@ javaDocP = JavaDoc <$> javaDocCommentsP
 test_javaDocP :: Test
 test_javaDocP =
   TestList
-    [ P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n* @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class\n") [Version (Description "1.0")]) (Name "bar")])
+    [ 
+      P.parse javaDocP "public class Foo {\n/**\n* The Foo class\n * @version 1.0\n*/\npublic void bar() {\n}\n}" ~?= Right (JavaDoc [Class (JavaDocHeader (Description "") []) (Name "Foo"), Method (JavaDocHeader (Description "The Foo class") [Version (Description "1.0")]) (Name "bar")])
     ]
 
 instance Arbitrary String where
