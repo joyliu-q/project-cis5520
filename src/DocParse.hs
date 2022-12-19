@@ -21,8 +21,25 @@ wsP p = p <* many (P.satisfy Char.isSpace)
 nlP :: Parse a -> Parse a
 nlP p = many (P.satisfy (== '\n')) *> p <* many (P.satisfy (== '\n'))
 
+-- TODO: not my proudest work
 braces :: Parse String
-braces = wsP (P.string "{") <* many (P.satisfy (/= '}')) <* wsP (P.string "}")
+braces = wsP (P.string "{") *> many anyChar >>= -- give remaining string, keep track of how many braces
+  \s -> do
+    -- keep going until braces count is 0, braces count starts of as 1 (} decreases it by 1, { increases it by 1)
+    let (s', count) = go s 1
+    if count == 0
+      then pure s'
+      else error "No parses"
+  where
+    go :: String -> Int -> (String, Int)
+    go s count = case count of
+      0 -> (s, count)
+      _ -> case s of
+        [] -> error "No parses"
+        hd : tl -> case hd of
+          '{' -> go tl (count + 1)
+          '}' -> go tl (count - 1)
+          _ -> go tl count
 
 paren :: Parse String
 paren = wsP (P.string "(") <* many (P.satisfy (/= ')')) <* wsP (P.string ")")
@@ -39,6 +56,12 @@ test_nlP =
     [ P.parse (nlP P.alpha) "a" ~?= Right 'a',
       P.parse (many (nlP P.alpha)) "ab \n   \t c" ~?= Right "ab"
     ]
+
+-- >>> P.parse (stringsP ["many"] *> (many anyChar)) "many public class Foo {}"
+-- Right " public class Foo {}"
+
+-- >>> P.parse (wsP (stringsP ["static", "final"]) *> (wsP (many (P.satisfy (/= ' '))) *> (wsP (many (P.satisfy (/= ' '))) <* wsP (many (P.satisfy (/= ';')))))) "static final int a = 1;"
+-- Right "int"
 
 stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
@@ -227,8 +250,6 @@ test_interfaceP =
       P.parse interfaceP "/**\n* The Foo interface\n* @version 1.0\n* @param x the x value\n*/\ninterface Foo { \n // blah \n } \n" ~?= Right (Interface (JavaDocHeader (Description "The Foo interface") [Version (Description "1.0"), Param (Name "x") (Description "the x value")]) (Name "Foo"))
     ]
 
--- >>> P.parse (fieldCommentP *> many anyChar) "/**\n blah\n */\nHi there;"
--- Right ""
 fieldCommentP :: Parse JavaDocComment
 fieldCommentP = Field <$> header <*> name <* wsP (P.string ";")
   where
@@ -236,7 +257,7 @@ fieldCommentP = Field <$> header <*> name <* wsP (P.string ";")
       Description <$> (commentP (many anyChar) >>= \d ->
         let trimEnd = dropWhileEnd Char.isSpace d in 
         return trimEnd)
-    name = Name <$> (wsP (many (P.satisfy Char.isAlphaNum)) *> wsP (many (P.satisfy Char.isAlphaNum))) 
+    name = Name <$> (wsP (stringsP ["static"]) *> wsP (stringsP ["final"]) *> wsP (many (P.satisfy (/= ' '))) *> wsP (many (P.satisfy (/= ' ')))) <* wsP (many (P.satisfy (/= ';')))
 
 classAndMethodP :: Parse [JavaDocComment]
 classAndMethodP =
