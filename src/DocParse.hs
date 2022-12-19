@@ -53,12 +53,6 @@ test_nlP =
       P.parse (many (nlP P.alpha)) "ab \n   \t c" ~?= Right "ab"
     ]
 
--- >>> P.parse (stringsP ["many"] *> (many anyChar)) "many public class Foo {}"
--- Right " public class Foo {}"
-
--- >>> P.parse (wsP (stringsP ["static", "final"]) *> (wsP (many (P.satisfy (/= ' '))) *> (wsP (many (P.satisfy (/= ' '))) <* wsP (many (P.satisfy (/= ';')))))) "static final int a = 1;"
--- Right "int"
-
 -- | Parse for multiple possible strings
 stringsP :: [String] -> Parse [Char]
 stringsP l = case l of
@@ -153,7 +147,7 @@ processCommentLine s =
                   trimStart = dropWhile Char.isSpace trimEnd --
                   removeStar = dropWhile (== '*') trimStart --
                   trimStart' = dropWhile Char.isSpace removeStar --
-               in trimStart' ++ process tl --
+               in trimStart' ++ " " ++ process tl --
        in process sList
 
 -- | Process a multiline comment
@@ -217,10 +211,19 @@ test_classP =
 
 -- | Parse an interface method's signature
 interfaceMethodP :: Parse JavaDocComment
-interfaceMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= ';')) <* wsP (P.string ";")
-  where
-    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (P.satisfy (/= ' ')) *> wsP (many (P.satisfy Char.isAlphaNum)))
+interfaceMethodP = do
+      header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+      ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
+      static <- wsP (stringsP ["static"])
+      methodType <- wsP (many (P.satisfy Char.isAlphaNum))
+      name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum)) 
+      args <- wsP paren
+      additionalBody <- many (P.satisfy (/= ';'))
+      semi <- wsP (P.string ";")
+      -- require methodType exists, name exists, and headers exist
+      if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
+        then error "Invalid interface method"
+        else pure (Method header name)
 
 -- | Parse a class method's signature
 classMethodP :: Parse JavaDocComment
@@ -233,21 +236,29 @@ classMethodP = do
       args <- wsP paren
       implements <- wsP (many (P.satisfy (/= '{')))
       implementation <- braces
-      pure (Method header name)
+      -- require methodType exists, name exists, and headers exist
+      if methodType == "" || name == Name "" || header == JavaDocHeader (Description "") []
+        then error "Invalid class method"
+        else pure (Method header name)
 
 -- | Parse a constructor method
 constructorMethodP :: Parse JavaDocComment
-constructorMethodP = Method <$> header <*> name <* paren <* many (P.satisfy (/= '{')) <* braces
-  where
-    header = commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
-    name = Name <$> (wsP (stringsP ["public", "private", "protected"]) *> wsP (stringsP ["static"]) *> wsP (many P.alpha))
+constructorMethodP = do
+      header <- commentP (JavaDocHeader <$> descriptionP <*> tags) <|> (JavaDocHeader (Description "") <$> tags)
+      ignoredHeaders <- wsP (stringsP ["public", "private", "protected"])
+      static <- wsP (stringsP ["static"])
+      name <- Name <$> wsP (many (P.satisfy Char.isAlphaNum))
+      args <- wsP paren
+      implements <- wsP (many (P.satisfy (/= '{')))
+      implementation <- braces
+      -- require name exists, and headers exist
+      if name == Name "" || header == JavaDocHeader (Description "") []
+        then error "Invalid constructor method"
+        else pure (Method header name)
 
 -- | Parse a generic / unknown type of method
 methodP :: Parse JavaDocComment
 methodP = wsP (constructorMethodP <|> interfaceMethodP <|> classMethodP)
-
--- >>> P.parse methodP "void bar();"
--- Left "No parses"
 
 test_methodP :: Test
 test_methodP =
@@ -286,7 +297,6 @@ fieldCommentP :: Parse JavaDocComment
 fieldCommentP = Field <$> header <*> name <* wsP (P.string ";")
   where
     header =
-      -- Description <$> commentP (many anyChar)
       Description
         <$> ( commentP (many anyChar) >>= \d ->
                 let trimEnd = dropWhileEnd Char.isSpace d
@@ -302,8 +312,6 @@ classAndMethodP =
     res <- wsP (P.string "}")
     return (c : ms)
 
--- >>> P.parse (interfaceP *> many (interfaceMethodP <|> fieldCommentP) *> many anyChar) "public interface Test {\n/**\n * Hi\n*/\nString foo;\n}"
--- Right "}"
 interfaceAndMethodP :: Parse [JavaDocComment]
 interfaceAndMethodP =
   do
